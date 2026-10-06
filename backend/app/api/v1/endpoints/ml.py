@@ -11,16 +11,38 @@ from app.ml.dataset import generate_synthetic_priority_dataset
 
 router = APIRouter()
 
+import os
+
 @router.get("/evaluation")
 def ml_evaluation():
+    yolo_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../services/weights/best.pt"))
+    yolo_trained = os.path.exists(yolo_weights)
+    
     return {
-        "status": "not_available",
-        "reason": "Priority ML training is blocked by the missing real dataset. No evaluation metrics available."
+        "yolo": {
+            "trained": yolo_trained,
+            "available": yolo_trained,
+            "metrics": "unavailable" if not yolo_trained else "evaluated"
+        },
+        "priority_ml": {
+            "trained": False,
+            "available": False,
+            "reason": "Priority ML training is blocked by the missing real dataset."
+        }
     }
 
 @router.get("/models")
 def ml_models():
+    yolo_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../services/weights/best.pt"))
+    yolo_trained = os.path.exists(yolo_weights)
+    
     return {
+        "yolo": {
+            "name": "YOLOv8 Detection",
+            "trained": yolo_trained,
+            "available": yolo_trained,
+            "weights_path": yolo_weights if yolo_trained else None
+        },
         "models": [
             "Decision Tree", "Logistic Regression", "Random Forest", "Gradient Boosting"
         ],

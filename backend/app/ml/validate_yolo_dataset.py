@@ -37,8 +37,8 @@ def validate_yolo_dataset(yaml_path):
     split_counts = {'train': 0, 'val': 0, 'test': 0}
 
     for split in ['train', 'val', 'test']:
-        if split in config:
-            img_dir = os.path.join(base_dir, config[split])
+            rel_path = os.path.join(config.get('path', ''), config[split])
+            img_dir = os.path.join(base_dir, rel_path)
             lbl_dir = img_dir.replace("images", "labels")
             
             if not os.path.exists(img_dir):

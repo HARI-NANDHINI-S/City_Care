@@ -29,6 +29,13 @@ def main():
         print(f"Training not executed because hardware/dataset availability is insufficient.")
         sys.exit(1)
         
+    import torch
+    cuda_available = torch.cuda.is_available()
+    device = 0 if cuda_available else "cpu"
+    print(f"[INFO] Hardware check: CUDA available = {cuda_available} (Device: {device})")
+    if not cuda_available:
+        print("[WARNING] CUDA is NOT available. Running on CPU mode.")
+
     print(f"[INFO] Initializing YOLO model with {args.model}")
     model = YOLO(args.model)
     
@@ -41,7 +48,8 @@ def main():
             imgsz=args.imgsz,
             batch=args.batch,
             name=args.name,
-            project="runs/detect"
+            project="runs/detect",
+            device=device
         )
         print("\n[EVALUATION RESULTS]")
         # Evaluate model performance on the validation set
@@ -50,7 +58,18 @@ def main():
         print(f"mAP50: {metrics.box.map50}")
         
         print("\n[INFO] Training complete.")
-        print(f"[INFO] Best weights saved to runs/detect/{args.name}/weights/best.pt")
+        save_dir = getattr(model.trainer, 'save_dir', f"runs/detect/{args.name}")
+        best_weights_src = os.path.join(save_dir, "weights", "best.pt")
+        target_weights_dir = os.path.join(os.path.dirname(__file__), "../services/weights")
+        target_weights_path = os.path.join(target_weights_dir, "best.pt")
+        
+        if os.path.exists(best_weights_src):
+            os.makedirs(target_weights_dir, exist_ok=True)
+            import shutil
+            shutil.copy(best_weights_src, target_weights_path)
+            print(f"[SUCCESS] Trained weights saved & copied to {target_weights_path}")
+        else:
+            print(f"[WARNING] Could not find best.pt at {best_weights_src}")
         
     except Exception as e:
         print(f"[ERROR] Training failed: {str(e)}")

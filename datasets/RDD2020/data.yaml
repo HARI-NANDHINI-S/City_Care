@@ -1,6 +1,7 @@
-train: E:\City_Care\datasets\RDD2020\yolo\images\train
-val: E:\City_Care\datasets\RDD2020\yolo\images\val
-test: E:\City_Care\datasets\RDD2020\yolo\images\test
+path: yolo
+train: images/train
+val: images/val
+test: images/test
 
 nc: 4
 names:
