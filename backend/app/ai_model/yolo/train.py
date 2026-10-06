@@ -32,7 +32,8 @@ def train_model(data_path=config.DATASET_YAML, epochs=config.EPOCHS, batch=confi
             batch=batch,
             name='yolo_run',
             project='runs/detect',
-            device=device
+            device=device,
+            workers=0
         )
         
         save_dir = getattr(model.trainer, 'save_dir', 'runs/detect/yolo_run')

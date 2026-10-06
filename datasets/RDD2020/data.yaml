@@ -1,4 +1,4 @@
-path: yolo
+path: E:/City_Care/datasets/RDD2020/yolo
 train: images/train
 val: images/val
 test: images/test
