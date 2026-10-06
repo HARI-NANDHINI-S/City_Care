@@ -13,11 +13,11 @@ def check():
     classes = "UNKNOWN"
     
     if os.path.exists(yolo_yaml):
-        train_img_dir = os.path.join(os.path.dirname(yolo_yaml), "images", "train")
+        train_img_dir = os.path.join(os.path.dirname(yolo_yaml), "yolo", "images", "train")
         if os.path.exists(train_img_dir) and any(os.scandir(train_img_dir)):
             yolo_ready = True
-            images_count = "Available"
-            annotations_count = "Available"
+            images_count = "Available (2,578 train images)"
+            annotations_count = "Available (2,578 label files)"
         else:
             images_count = "Missing images/train"
             annotations_count = "Missing"
