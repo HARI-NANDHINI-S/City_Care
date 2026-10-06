@@ -1,0 +1,14 @@
+issue_count,damage_area,detection_confidence,severity,road_age_years,road_condition,traffic_volume,accident_history,nearby_school,nearby_hospital,drainage_condition,days_since_maintenance,priority_class
+# issue_count: integer (number of issues reported)
+# damage_area: float (affected area in square meters or ratio)
+# detection_confidence: float (0.0 to 1.0)
+# severity: integer (1 to 4)
+# road_age_years: float
+# road_condition: float (0.0 to 1.0 representing wear)
+# traffic_volume: integer (vehicles per day)
+# accident_history: integer (number of accidents in past year)
+# nearby_school: boolean (1 or 0)
+# nearby_hospital: boolean (1 or 0)
+# drainage_condition: integer (1=poor, 2=fair, 3=good)
+# days_since_maintenance: integer
+# priority_class: integer (1=Low, 2=Medium, 3=High, 4=Critical)

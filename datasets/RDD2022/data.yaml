@@ -1,0 +1,11 @@
+train: ../images/train
+val: ../images/val
+# test: ../images/test # optional
+
+nc: 4
+names: ['D00', 'D10', 'D20', 'D40']
+
+# D00: Longitudinal Crack
+# D10: Transverse Crack
+# D20: Alligator Crack
+# D40: Pothole

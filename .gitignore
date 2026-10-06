@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Python environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python build/package files
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables
+.env
+backend/.env
+
+# Databases
+*.db
+
+# RDD2020 dataset - large files
+datasets/RDD2020/images/
+datasets/RDD2020/labels/
+*.tar
+*.tar.gz
+
+# Other large datasets
+trained_weights/
+
+# ML model files
+*.pt
+*.joblib
+*.pkl
+runs/
+yolov8n.pt
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+git_objects.txt
+
+# Local classification dataset
+Indian-Road-Damage-Infrastructure-Dataset/
+
+.git_old/
