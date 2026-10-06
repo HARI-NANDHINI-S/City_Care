@@ -37,7 +37,10 @@ def history(db,issue,user,new_status,note=None,progress=None):
 def analyze_image(file:UploadFile=File(...), current_user:User=Depends(get_current_user)):
     ext=os.path.splitext(file.filename or '')[1].lower() or '.jpg'; name=f'{uuid.uuid4().hex}{ext}'; path=os.path.join(settings.ORIGINAL_IMG_DIR,name); os.makedirs(settings.ORIGINAL_IMG_DIR,exist_ok=True); os.makedirs(settings.ANNOTATED_IMG_DIR,exist_ok=True)
     with open(path,'wb') as f: f.write(file.file.read())
-    result=analyze_issue_image(path); result['original_image_url']=f'/uploads/original/{name}'; ann=result.get('annotated_image_filename'); result['annotated_image_url']=f'/uploads/annotated/{ann}' if ann else None
+    result=analyze_issue_image(path)
+    if result.get("error"):
+        raise HTTPException(status_code=503, detail=result["error"])
+    result['original_image_url']=f'/uploads/original/{name}'; ann=result.get('annotated_image_filename'); result['annotated_image_url']=f'/uploads/annotated/{ann}' if ann else None
     return result
 
 @router.post('',response_model=IssueDetailOut)

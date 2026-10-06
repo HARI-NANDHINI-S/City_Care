@@ -13,10 +13,10 @@ router = APIRouter()
 
 @router.get("/evaluation")
 def ml_evaluation():
-    df = generate_synthetic_priority_dataset(100)
-    models = CivicVisionPriorityModels()
-    results = models.train_and_evaluate(df)
-    return results
+    return {
+        "status": "not_available",
+        "reason": "Priority ML training is blocked by the missing real dataset. No evaluation metrics available."
+    }
 
 @router.get("/models")
 def ml_models():
@@ -34,37 +34,27 @@ def ml_predictions(issue_id: int, db: Session = Depends(get_db)):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue: return {"error": "not found"}
     
-    features = {
-        'issue_count': 1, 'damage_area': 0.1, 'detection_confidence': issue.ai_confidence or 0.8, 'severity': getattr(issue.severity, 'value', 1) if issue.severity else 1,
-        'road_age_years': 5, 'road_condition': 1, 'traffic_volume': 1000, 'accident_history': 0,
-        'nearby_school': 0, 'nearby_hospital': 0, 'drainage_condition': 1, 'days_since_maintenance': 365
-    }
-    
     models = CivicVisionPriorityModels()
-    pred = models.predict_priority(features)
+    model, scaler = models.get_primary_model()
+    if not model:
+        return {
+            "status": "not_available",
+            "reason": "Priority ML model is not trained yet due to missing dataset."
+        }
     
-    from app.ml.recommendation import get_maintenance_recommendation
-    rec = get_maintenance_recommendation(pred["priority_class"], issue.issue_type.value if issue.issue_type else "Pothole", features)
-    
+    # We would build real features here, but since the model isn't trained and we have no real context features in DB, we fail explicitly
     return {
-        "prediction": pred,
-        "recommendation": rec
+        "status": "not_available",
+        "reason": "Real contextual features (traffic, road age, etc.) are missing from the current database schema."
     }
+
 
 @router.get("/explanations/{issue_id}")
 def ml_explanations(issue_id: int, db: Session = Depends(get_db)):
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
-    if not issue: return {"error": "not found"}
-    
-    features = {
-        'issue_count': 1, 'damage_area': 0.1, 'detection_confidence': issue.ai_confidence or 0.8, 'severity': getattr(issue.severity, 'value', 1) if issue.severity else 1,
-        'road_age_years': 5, 'road_condition': 1, 'traffic_volume': 1000, 'accident_history': 0,
-        'nearby_school': 0, 'nearby_hospital': 0, 'drainage_condition': 1, 'days_since_maintenance': 365
+    return {
+        "status": "not_available",
+        "reason": "SHAP explanations blocked. Missing trained Random Forest and real feature vectors."
     }
-    
-    explainer = ShapExplainer()
-    res = explainer.explain_prediction(features)
-    return res
 
 @router.get("/clusters")
 def ml_clusters(db: Session = Depends(get_db)):

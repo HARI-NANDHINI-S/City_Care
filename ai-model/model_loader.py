@@ -44,6 +44,4 @@ class CivicVisionModelLoader:
                     })
             return boxes_data
         else:
-            from app.services.ai_service import generate_dev_heuristic_analysis
-            res = generate_dev_heuristic_analysis(image_path)
-            return res["bounding_boxes"]
+            raise Exception("Model weights not available. Object detection model is not trained yet.")
