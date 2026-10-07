@@ -15,26 +15,32 @@ import os
 
 @router.get("/evaluation")
 def ml_evaluation():
-    yolo_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../services/weights/best.pt"))
+    yolo_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../ai_model/yolo/weights/best.pt"))
+    rf_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../ai_model/random_forest/weights/random_forest.joblib"))
+    
     yolo_trained = os.path.exists(yolo_weights)
+    rf_trained = os.path.exists(rf_weights)
     
     return {
         "yolo": {
             "trained": yolo_trained,
             "available": yolo_trained,
-            "metrics": "unavailable" if not yolo_trained else "evaluated"
+            "metrics": "evaluated" if yolo_trained else "unavailable"
         },
-        "priority_ml": {
-            "trained": False,
-            "available": False,
-            "reason": "Priority ML training is blocked by the missing real dataset."
+        "random_forest": {
+            "trained": rf_trained,
+            "available": rf_trained,
+            "metrics": "evaluated" if rf_trained else "unavailable"
         }
     }
 
 @router.get("/models")
 def ml_models():
-    yolo_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../services/weights/best.pt"))
+    yolo_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../ai_model/yolo/weights/best.pt"))
+    rf_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../ai_model/random_forest/weights/random_forest.joblib"))
+    
     yolo_trained = os.path.exists(yolo_weights)
+    rf_trained = os.path.exists(rf_weights)
     
     return {
         "yolo": {
@@ -43,12 +49,12 @@ def ml_models():
             "available": yolo_trained,
             "weights_path": yolo_weights if yolo_trained else None
         },
-        "models": [
-            "Decision Tree", "Logistic Regression", "Random Forest", "Gradient Boosting"
-        ],
-        "primary": "Random Forest",
-        "baselines": ["Decision Tree", "Logistic Regression"],
-        "comparison": ["Gradient Boosting"]
+        "random_forest": {
+            "name": "Random Forest Maintenance Prediction",
+            "trained": rf_trained,
+            "available": rf_trained,
+            "weights_path": rf_weights if rf_trained else None
+        }
     }
 
 @router.get("/predictions/{issue_id}")
@@ -56,18 +62,30 @@ def ml_predictions(issue_id: int, db: Session = Depends(get_db)):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue: return {"error": "not found"}
     
-    models = CivicVisionPriorityModels()
-    model, scaler = models.get_primary_model()
-    if not model:
-        return {
-            "status": "not_available",
-            "reason": "Priority ML model is not trained yet due to missing dataset."
-        }
+    # Check Random Forest
+    rf_weights = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../ai_model/random_forest/weights/random_forest.joblib"))
+    rf_available = os.path.exists(rf_weights)
     
-    # We would build real features here, but since the model isn't trained and we have no real context features in DB, we fail explicitly
+    rf_status = "not_available"
+    rf_reason = "Required road-context features are unavailable"
+    rf_maintenance_needed = None
+    rf_probability = None
+    
+    # We do not have contextual features in DB right now, so we honestly report not_available
+    # and don't invent synthetic ones.
+    
     return {
-        "status": "not_available",
-        "reason": "Real contextual features (traffic, road age, etc.) are missing from the current database schema."
+        "yolo": {
+            "status": "success" if issue.ai_confidence > 0 else "not_available"
+        },
+        "random_forest": {
+            "status": rf_status,
+            "reason": rf_reason
+        },
+        "priority": {
+            "level": issue.severity.value if issue.severity else "Unknown",
+            "score": issue.priority_score
+        }
     }
 
 

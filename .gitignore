@@ -68,7 +68,15 @@ Thumbs.db
 # Temporary files
 git_objects.txt
 
+# File Uploads
+backend/uploads/
+
+# Pytest cache
+.pytest_cache/
+backend/.pytest_cache/
+
 # Local classification dataset
+Indian-Road-Damage-Infrastructure-Dataset/
 Indian-Road-Damage-Infrastructure-Dataset/
 
 .git_old/

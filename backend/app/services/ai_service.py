@@ -5,6 +5,7 @@ import random
 from typing import Dict, Any, List
 from PIL import Image
 import numpy as np
+from app.ai_model.yolo.predict import predict as yolo_predict
 
 try:
     import cv2
@@ -27,11 +28,14 @@ CLASSES_LIST = [
 ]
 
 def generate_dev_heuristic_analysis(image_path: str) -> Dict[str, Any]:
-    """
-    Development/Demo Basic Computer Vision Engine.
-    Analyzes actual image dimensions and produces realistic defect detection bounding boxes,
-    confidence score, severity, and annotated visualization image.
-    """
+    # Development fallback remains ONLY for tests or explicit demo routes,
+    # but MUST NOT be used in the production AI path.
+    return {
+        "error": "Heuristic fallback is disabled in production.",
+        "is_real_yolo": False
+    }
+
+def analyze_issue_image(image_path: str) -> Dict[str, Any]:
     filename = os.path.basename(image_path)
     try:
         with Image.open(image_path) as img:
@@ -39,81 +43,119 @@ def generate_dev_heuristic_analysis(image_path: str) -> Dict[str, Any]:
     except Exception:
         width, height = 800, 600
 
-    # Basic determination based on file name or image hash to maintain consistency
-    hash_val = sum(ord(c) for c in filename)
-    detected_type = CLASSES_LIST[hash_val % len(CLASSES_LIST)]
+    yolo_result = yolo_predict(image_path)
     
-    # Generate 1-2 realistic bounding box coordinates
-    box_w = int(width * random.uniform(0.25, 0.45))
-    box_h = int(height * random.uniform(0.20, 0.40))
-    box_x = int((width - box_w) * random.uniform(0.2, 0.7))
-    box_y = int((height - box_h) * random.uniform(0.2, 0.7))
+    if yolo_result.get("status") != "success":
+        return {
+            "error": "Real YOLO model not available.",
+            "is_real_yolo": False,
+            "reason": yolo_result.get("reason", "YOLO model failed to load or predict.")
+        }
+        
+    detections = yolo_result.get("detections", [])
+    
+    # 1. Verify class mapping: Map known RDD2020 classes
+    YOLO_CLASS_MAPPING = {
+        "D00": IssueType.ROAD_DAMAGE.value,
+        "D10": IssueType.ROAD_DAMAGE.value,
+        "D20": IssueType.ROAD_DAMAGE.value,
+        "D40": IssueType.POTHOLE.value,
+    }
+    
+    valid_detections = []
+    for det in detections:
+        raw_class = det["class"]
+        # If it's already a valid IssueType, keep it. Otherwise check mapping.
+        mapped_class = raw_class if raw_class in CLASSES_LIST else YOLO_CLASS_MAPPING.get(raw_class)
+        if mapped_class:
+            det["mapped_class"] = mapped_class
+            valid_detections.append(det)
+            
+    if not valid_detections:
+        return {
+            "status": "no_detection",
+            "message": "No supported civic issue detected in the image",
+            "issue_type": None,
+            "confidence": None,
+            "severity": None,
+            "priority_score": None,
+            "recommended_department": None,
+            "recommended_department_code": None,
+            "bounding_boxes": [],
+            "defect_area_ratio": 0.0,
+            "annotated_image_filename": filename,
+            "original_image_filename": filename,
+            "is_real_yolo": True,
+            "count": 0
+        }
 
-    confidence = round(random.uniform(0.85, 0.97), 2)
-    defect_area_ratio = round((box_w * box_h) / (width * height), 3)
+    # Pick the highest confidence detection
+    best_detection = max(valid_detections, key=lambda x: x["confidence"])
+    mapped_type = best_detection["mapped_class"]
+    confidence = best_detection["confidence"]
+    
+    # Calculate defect area ratio for priority
+    total_area = width * height
+    box_area = 0
+    bounding_boxes = []
+    
+    for det in valid_detections:
+        coords = det["bounding_box"]
+        x1, y1, x2, y2 = coords
+        w = x2 - x1
+        h = y2 - y1
+        box_area += (w * h)
+        bounding_boxes.append({
+            "class": det["mapped_class"],  # Use mapped class here
+            "raw_class": det["class"],
+            "confidence": det["confidence"],
+            "x": int(x1),
+            "y": int(y1),
+            "width": int(w),
+            "height": int(h),
+            "box_normalized": [
+                round(x1 / width, 3),
+                round(y1 / height, 3),
+                round(w / width, 3),
+                round(h / height, 3)
+            ]
+        })
+        
+    defect_area_ratio = round(box_area / total_area, 3) if total_area > 0 else 0.0
+    defect_area_ratio = min(1.0, defect_area_ratio)
 
-    bounding_boxes = [{
-        "class": detected_type,
-        "confidence": confidence,
-        "x": box_x,
-        "y": box_y,
-        "width": box_w,
-        "height": box_h,
-        "box_normalized": [
-            round(box_x / width, 3),
-            round(box_y / height, 3),
-            round(box_w / width, 3),
-            round(box_h / height, 3)
-        ]
-    }]
-
-    # Draw annotated overlay image using OpenCV or PIL
+    # Annotated image (reuse existing OpenCV drawing if CV2 is available)
     annotated_filename = f"annotated_{uuid.uuid4().hex[:8]}_{filename}"
     annotated_path = os.path.join(settings.ANNOTATED_IMG_DIR, annotated_filename)
 
     if HAS_OPENCV:
         cv_img = cv2.imread(image_path)
         if cv_img is not None:
-            # Color coding by class
-            color_map = {
-                IssueType.POTHOLE.value: (0, 0, 255),       # Red
-                IssueType.GARBAGE.value: (0, 165, 255),    # Orange
-                IssueType.WATERLOGGING.value: (255, 0, 0), # Blue
-                IssueType.STREETLIGHT.value: (0, 255, 255),# Yellow
-                IssueType.MANHOLE.value: (255, 0, 255),   # Magenta
-                IssueType.ROAD_DAMAGE.value: (0, 128, 255) # Deep Orange
-            }
-            box_color = color_map.get(detected_type, (0, 255, 0))
-            
-            # Draw rectangle
-            cv2.rectangle(cv_img, (box_x, box_y), (box_x + box_w, box_y + box_h), box_color, 3)
-            
-            # Draw label banner
-            label = f"CivicVision AI: {detected_type} ({int(confidence*100)}%)"
-            (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-            cv2.rectangle(cv_img, (box_x, box_y - text_h - 10), (box_x + text_w + 10, box_y), box_color, -1)
-            cv2.putText(cv_img, label, (box_x + 5, box_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            
+            for bbox in bounding_boxes:
+                bx, by, bw, bh = bbox["x"], bbox["y"], bbox["width"], bbox["height"]
+                cv2.rectangle(cv_img, (bx, by), (bx + bw, by + bh), (0, 255, 0), 3)
+                label = f"{bbox['class']} ({int(bbox['confidence']*100)}%)"
+                cv2.putText(cv_img, label, (bx + 5, by - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             cv2.imwrite(annotated_path, cv_img)
         else:
-            # Fallback to copy original if OpenCV fails to read
             annotated_filename = filename
     else:
         annotated_filename = filename
 
     priority_score = calculate_priority_score(
-        issue_type=detected_type,
+        issue_type=mapped_type,
         ai_confidence=confidence,
         defect_area_ratio=defect_area_ratio,
         duplicate_count=0,
         hours_unresolved=0.0
     )
     severity = get_severity_from_priority(priority_score)
-    dept_name = get_recommended_department_name(detected_type)
-    dept_code = get_recommended_department_code(detected_type)
+    dept_name = get_recommended_department_name(mapped_type)
+    dept_code = get_recommended_department_code(mapped_type)
 
     return {
-        "issue_type": detected_type,
+        "status": "success",
+        "issue_type": mapped_type,
         "confidence": confidence,
         "severity": severity.value,
         "priority_score": priority_score,
@@ -122,37 +164,8 @@ def generate_dev_heuristic_analysis(image_path: str) -> Dict[str, Any]:
         "bounding_boxes": bounding_boxes,
         "defect_area_ratio": defect_area_ratio,
         "annotated_image_filename": annotated_filename,
-        "original_image_filename": filename
+        "original_image_filename": filename,
+        "is_real_yolo": True,
+        "count": len(bounding_boxes)
     }
 
-def analyze_issue_image(image_path: str) -> Dict[str, Any]:
-    import sys
-    import os
-    ai_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../ai-model"))
-    if ai_model_path not in sys.path:
-        sys.path.append(ai_model_path)
-    
-    try:
-        from model_loader import CivicVisionModelLoader
-        loader = CivicVisionModelLoader(weights_path=os.path.join(os.path.dirname(__file__), "weights", "best.pt"))
-        if loader.is_loaded:
-            boxes = loader.predict(image_path)
-            # Need to format the output to match what the system expects
-            # For this exercise, return an explicit indication that real inference occurred
-            # For now we use the basic function to get a full dict, but we mark it real
-            res = generate_dev_heuristic_analysis(image_path)
-            res["bounding_boxes"] = boxes
-            res["is_real_yolo"] = True
-            return res
-        else:
-            return {
-                "error": "Real YOLO model not available.",
-                "is_real_yolo": False,
-                "reason": "YOLO_MODEL_PATH missing or weights not found. Training not executed because hardware/dataset availability is insufficient."
-            }
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        return {
-            "error": f"Error loading YOLO model: {str(e)}",
-            "is_real_yolo": False
-        }

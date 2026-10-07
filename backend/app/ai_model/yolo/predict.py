@@ -1,6 +1,6 @@
 import os
 from ultralytics import YOLO
-from backend.app.ai_model.yolo import config
+from app.ai_model.yolo import config
 
 class YOLOPredictor:
     def __init__(self):

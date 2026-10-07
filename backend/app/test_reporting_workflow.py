@@ -38,9 +38,9 @@ def test_full_issue_reporting_workflow():
     assert ai_res.status_code == 200, f"AI Analysis failed: {ai_res.text}"
     ai_data = ai_res.json()
 
-    if "error" in ai_data:
-        print("[+] 2. AI Image Analysis: MODEL NOT AVAILABLE (Expected Behavior)")
-        print(f"    - Error: {ai_data['error']}")
+    if "error" in ai_data or ai_data.get("status") == "no_detection":
+        print("[+] 2. AI Image Analysis: NO VALID DETECTION (Expected Behavior for empty image/missing model)")
+        print(f"    - Details: {ai_data.get('error') or ai_data.get('message')}")
         # Create a mock payload to continue testing the database submission workflow
         issue_payload = {
             "title": "Hazardous Pothole on Main Street",
