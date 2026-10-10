@@ -112,3 +112,4 @@ def ml_clusters(db: Session = Depends(get_db)):
     clustering = SpatialClustering()
     res = clustering.cluster_issues(issues_list)
     return res
+

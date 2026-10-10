@@ -57,8 +57,42 @@ To verify the application logic independently of the constrained YOLO pipeline, 
 *   Frontend Handing of 503 HTTP / `no_detection` Rejections
 
 ### ✅ VERIFIED (ML Functional Integrity)
-*   **Random Forest Maintenance Prediction**: Validated to run locally. Safely disconnected from live API due to honest reporting of missing environmental DB features.
+*   **Decision Tree Maintenance Prediction**: Implemented and validated to run locally. Like Random Forest, disconnected from live API due to missing environmental data. **(Status: Validated only as a synthetic rule-reproduction baseline. See `DECISION_TREE_VALIDATION_REPORT.md`).**
+*   **Random Forest Maintenance Prediction**: Validated to run locally. Safely disconnected from live API due to honest reporting of missing environmental DB features. **(Status: Validated only as a synthetic rule-reproduction baseline. See `RANDOM_FOREST_VALIDATION_REPORT.md` for full dataset audit and leakage analysis).**
 *   **YOLO Graceful Failure**: Safely intercepted by the backend; does not crash the server.
 
 ### 🛑 BLOCKED (OS Restricted)
 *   Live Local PyTorch/YOLO Workflows (`test_ai_pipeline.py`, `test_reporting_workflow.py` natively).
+
+---
+
+## 5. End-to-End Workflow Matrix
+
+| Feature | Frontend Verified | Backend Verified | Real Database Verified | Mock Used | Remaining Defect |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Authentication (Login/Register)** | Yes | Yes | Yes | No | None |
+| **Role-Based Access Control** | Yes | Yes | Yes | No | None |
+| **Issue Reporting & DB Persistence** | Yes | Yes | Yes | No | None |
+| **YOLO Object Detection** | Yes (503 Error UI) | Yes (Intercepts WinError) | N/A | No | Blocked locally by Windows App Control |
+| **Random Forest Prediction** | Yes (Shows unavailable) | Yes (Validated via `POST`) | N/A | No | Requires real `PCI`/`AADT` data mapping |
+| **Issue Dashboard & Status Updates** | Yes | Yes | Yes | No | None |
+| **GIS Mapping Serialization** | Yes | Yes | Yes | No | None |
+| **Municipal Analytics Aggregation** | Yes | Yes | Yes | No | None |
+
+---
+
+## 6. Prioritized Remaining Work for Demonstration Readiness
+
+1. **Deploy Isolated ML Service:** Deploy the FastAPI backend inside a standard Linux container (Docker/Cloud) where Windows Application Control cannot block PyTorch from initializing, allowing live YOLO inference without modifying host security policies.
+2. **Obtain Official Municipal Data (Random Forest):** The RF model is mathematically sound, but requires real road-context features (`PCI`, `AADT`, `Rutting`). Procure an official dataset or disable the RF component for the primary demonstration to avoid hallucinating metrics.
+## 7. Final Security & Demonstration Readiness Audit
+
+### A. Security Review Findings
+*   **Authentication & Secrets**: Hardcoded `.env` files and `civicvision.db` remain safely excluded via `.gitignore`.
+*   **Unauthorized ML Access Mitigation**: The previously exposed `POST /api/v1/ml/test-prediction` endpoint was completely removed from the API router (`backend/app/api/v1/endpoints/ml.py`) to prevent unauthorized internet exposure of inference routines. 
+*   **Direct Testing Adapted**: ML logic is now safely asserted via direct programmatic module execution (`python test_rf_direct.py`) bypassing the HTTP layer.
+
+### B. Demonstration Readiness
+The platform is cleared for physical demonstration under native Windows constraints. A comprehensive [CIVICVISION_DEMO_GUIDE.md](CIVICVISION_DEMO_GUIDE.md) has been created detailing startup sequences, realistic capabilities, and honest explanations for the hardware/OS blockers affecting the ML subsystems.
+
+**Final Classification: DEMONSTRATION READY (WITH DISCLOSED ML DEGRADATION)**

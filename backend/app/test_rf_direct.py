@@ -3,12 +3,12 @@ import sys
 import json
 
 # Add backend directory to sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.ai_model.decision_tree.predict import predict as dt_predict
+from app.ai_model.random_forest.predict import predict as rf_predict
 
-def test_dt():
-    print("=== Decision Tree Direct Integration Test ===")
+def test_rf():
+    print("=== Random Forest Direct Integration Test ===")
     
     # 1. Valid Features
     valid_payload = {
@@ -21,12 +21,12 @@ def test_dt():
         "Road Type": "Arterial",
         "Asphalt Type": "HMA"
     }
-    res = dt_predict(valid_payload)
+    res = rf_predict(valid_payload)
     print("\n[+] Valid Features:")
     print(json.dumps(res, indent=2))
     
     # 2. Missing/Empty Features
-    res = dt_predict({})
+    res = rf_predict({})
     print("\n[+] Missing Features:")
     print(json.dumps(res, indent=2))
     
@@ -35,7 +35,7 @@ def test_dt():
         "PCI": 65.0,
         "AADT": 15000
     }
-    res = dt_predict(partial_payload)
+    res = rf_predict(partial_payload)
     print("\n[+] Partial Features:")
     print(json.dumps(res, indent=2))
 
@@ -50,9 +50,9 @@ def test_dt():
         "Road Type": "Arterial",
         "Asphalt Type": "HMA"
     }
-    res = dt_predict(invalid_payload)
+    res = rf_predict(invalid_payload)
     print("\n[+] Invalid Features (Type Mismatch):")
     print(json.dumps(res, indent=2))
 
 if __name__ == "__main__":
-    test_dt()
+    test_rf()

@@ -11,7 +11,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
 
-from backend.app.ai_model.random_forest.config import (
+from app.ai_model.random_forest.config import (
     DATASET_PATH,
     MODEL_OUTPUT_PATH,
     METADATA_PATH,
