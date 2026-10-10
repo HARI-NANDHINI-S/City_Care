@@ -109,7 +109,104 @@ def ml_clusters(db: Session = Depends(get_db)):
             'issue_type': issue.issue_type.value if issue.issue_type else "Pothole",
             'priority_score': issue.priority_score
         })
-    clustering = SpatialClustering()
     res = clustering.cluster_issues(issues_list)
     return res
+
+@router.get("/lab/datasets")
+def get_lab_datasets():
+    return [
+        {
+            "id": "sf-pci-2023",
+            "name": "San Francisco Pavement Condition Index (PCI) Scores",
+            "source": "San Francisco Public Works / DataSF",
+            "coverage": "San Francisco, CA, USA",
+            "license": "Open Data (ODC-PDDL / Public Domain)",
+            "status": "DOWNLOADED_AND_VERIFIED",
+            "is_synthetic": False,
+            "row_count": 19461,
+            "column_count": 20,
+            "columns": ["CNN", "Street_Name", "PCI_Score", "From_Street", "To_Street", "PCI_Change_Date", "Treatment_or_Survey", "Street_Accepted_For_Maintenance", "Functional_Class", "X", "Y", "Latitude", "Longitude", "Line", "Point", "Neighborhoods"],
+            "target": "PCI_Score (Numeric 0-100)",
+            "missing_values": "Low for key fields",
+            "compatibility": "INCOMPATIBLE",
+            "limitations": "Contains valid PCI target but strictly lacks requested structural predictors (AADT, rainfall, rutting). Blocked from use.",
+            "link": "https://data.sfgov.org/api/views/5aye-4rtt/rows.csv?accessType=DOWNLOAD"
+        },
+        {
+            "id": "synthetic-downstream",
+            "name": "Synthetic Civic Prioritization Data",
+            "source": "Internal Generator",
+            "coverage": "Synthetic Pipeline",
+            "license": "Internal",
+            "status": "NOT_GENERATED",
+            "is_synthetic": True,
+            "row_count": 0,
+            "column_count": 0,
+            "columns": [],
+            "target": "Priority Score",
+            "missing_values": "N/A",
+            "compatibility": "BLOCKED",
+            "limitations": "Upstream models are untrained. Synthetic downstream data cannot be generated without genuine upstream predictions to avoid silent leakages.",
+            "link": null
+        }
+    ]
+
+@router.get("/lab/models")
+def get_lab_models():
+    # Return genuine status
+    return [
+        {
+            "id": "random_forest",
+            "name": "Random Forest",
+            "task": "Pavement Maintenance Prediction (Classification)",
+            "compatible_dataset": "None Verified",
+            "target_variable": "Needs Maintenance",
+            "readiness": "DATASET_NOT_READY",
+            "training_status": "NOT_TRAINED",
+            "dependency_status": "BLOCKED_ON_DATASET",
+            "next_action": "Acquire Genuine India PCI/PMS Dataset",
+            "features": ["PCI", "AADT", "Rutting", "IRI", "Rainfall", "Last Maintenance"],
+            "preprocessing": "StandardScaler (Numeric), OneHotEncoder (Categorical)"
+        },
+        {
+            "id": "decision_tree",
+            "name": "Decision Tree",
+            "task": "Pavement Maintenance Prediction (Classification)",
+            "compatible_dataset": "None Verified",
+            "target_variable": "Needs Maintenance",
+            "readiness": "DATASET_NOT_READY",
+            "training_status": "NOT_TRAINED",
+            "dependency_status": "BLOCKED_ON_DATASET",
+            "next_action": "Acquire Genuine India PCI/PMS Dataset",
+            "features": ["PCI", "AADT", "Rutting", "IRI", "Rainfall", "Last Maintenance"],
+            "preprocessing": "StandardScaler (Numeric), OneHotEncoder (Categorical)"
+        },
+        {
+            "id": "logistic_regression",
+            "name": "Logistic Regression",
+            "task": "Pavement Maintenance Prediction (Classification)",
+            "compatible_dataset": "None Verified",
+            "target_variable": "Needs Maintenance",
+            "readiness": "DATASET_NOT_READY",
+            "training_status": "NOT_TRAINED",
+            "dependency_status": "BLOCKED_ON_DATASET",
+            "next_action": "Acquire Genuine India PCI/PMS Dataset",
+            "features": ["PCI", "AADT", "Rutting", "IRI", "Rainfall", "Last Maintenance"],
+            "preprocessing": "StandardScaler (Numeric), OneHotEncoder (Categorical)"
+        },
+        {
+            "id": "gradient_boosting",
+            "name": "Gradient Boosting",
+            "task": "Pavement Maintenance Prediction (Classification)",
+            "compatible_dataset": "None Verified",
+            "target_variable": "Needs Maintenance",
+            "readiness": "DATASET_NOT_READY",
+            "training_status": "NOT_TRAINED",
+            "dependency_status": "BLOCKED_ON_DATASET",
+            "next_action": "Acquire Genuine India PCI/PMS Dataset",
+            "features": ["PCI", "AADT", "Rutting", "IRI", "Rainfall", "Last Maintenance"],
+            "preprocessing": "StandardScaler (Numeric), OneHotEncoder (Categorical)"
+        }
+    ]
+
 

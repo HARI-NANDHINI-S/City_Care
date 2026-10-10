@@ -1,0 +1,23 @@
+{
+  "dataset_name": "San Francisco Pavement Condition Index (PCI) Scores",
+  "source": "San Francisco Public Works / DataSF",
+  "source_url": "https://data.sfgov.org/api/views/5aye-4rtt/rows.csv?accessType=DOWNLOAD",
+  "license": "Open Data (ODC-PDDL / Public Domain)",
+  "country": "United States",
+  "region": "San Francisco, California",
+  "collection_period": "Historical to Current",
+  "row_count": 19461,
+  "column_count": 20,
+  "columns": [
+    "CNN", "Street_Name", "PCI_Score", "From_Street", "To_Street", "PCI_Change_Date", "Treatment_or_Survey", "Street_Accepted_For_Maintenance", "Functional_Class", "X", "Y", "Latitude", "Longitude", "Line", "Point", "Neighborhoods", "SF Find Neighborhoods", "Current Police Districts", "Current Supervisor Districts", "Analysis Neighborhoods"
+  ],
+  "target_variables": ["PCI_Score"],
+  "target_meaning": "Numerical score from 0 (failed) to 100 (excellent) indicating structural pavement condition.",
+  "suitability": {
+    "random_forest": false,
+    "decision_tree": false,
+    "logistic_regression": false,
+    "gradient_boosting": false
+  },
+  "limitations": "Contains valid target labels (PCI) but strictly lacks the rich environmental/structural features (AADT, rainfall, rutting) requested for the predictive models. Fails compatibility checks for the four required models."
+}
