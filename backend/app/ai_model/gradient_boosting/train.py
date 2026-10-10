@@ -53,6 +53,11 @@ def train():
         
     df.dropna(subset=required_columns, inplace=True)
     
+    # Downsample to 100,000 rows to make GradientBoostingClassifier train in a reasonable time
+    if len(df) > 100000:
+        print("Downsampling to 100,000 rows for Gradient Boosting training speed...")
+        df = df.sample(n=100000, random_state=RANDOM_STATE)
+    
     target_vals = df[TARGET_COLUMN].unique()
     if not set(target_vals).issubset({0, 1}):
         print(f"Error: Target column contains values other than 0 and 1: {target_vals}")
