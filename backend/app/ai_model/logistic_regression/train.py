@@ -7,28 +7,27 @@ from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
 
-from app.ai_model.gradient_boosting.config import (
+from app.ai_model.logistic_regression.config import (
     DATASET_PATH,
     MODEL_OUTPUT_PATH,
     METADATA_PATH,
-    FEATURE_IMPORTANCE_PATH,
+    COEFFICIENTS_PATH,
     WEIGHTS_DIR,
     RANDOM_STATE,
     TEST_SIZE,
-    N_ESTIMATORS,
-    LEARNING_RATE,
-    MAX_DEPTH,
+    MAX_ITER,
+    C_VALUE,
     NUMERIC_FEATURES,
     CATEGORICAL_FEATURES,
     TARGET_COLUMN
 )
 
 def train():
-    print("=== Gradient Boosting Model Training (Label Reproduction Experiment) ===")
+    print("=== Logistic Regression Model Training (Label Reproduction Experiment) ===")
     print("WARNING: As established in the Random Forest audit, this dataset contains")
     print("synthetic labels. This training process serves only as a rule-reproduction")
     print("baseline, not proof of real-world predictive ability.")
@@ -72,24 +71,24 @@ def train():
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ('num', 'passthrough', NUMERIC_FEATURES),
+            ('num', StandardScaler(), NUMERIC_FEATURES),
             ('cat', OneHotEncoder(handle_unknown='ignore'), CATEGORICAL_FEATURES)
         ]
     )
 
-    gb = GradientBoostingClassifier(
-        n_estimators=N_ESTIMATORS,
-        learning_rate=LEARNING_RATE,
-        max_depth=MAX_DEPTH,
-        random_state=RANDOM_STATE
+    lr = LogisticRegression(
+        random_state=RANDOM_STATE,
+        max_iter=MAX_ITER,
+        C=C_VALUE,
+        n_jobs=-1
     )
 
     pipeline = Pipeline(steps=[
         ('preprocessor', preprocessor),
-        ('classifier', gb)
+        ('classifier', lr)
     ])
 
-    print("Training Gradient Boosting model...")
+    print("Training Logistic Regression model...")
     start_time = time.time()
     pipeline.fit(X_train, y_train)
     end_time = time.time()
@@ -118,28 +117,29 @@ def train():
     joblib.dump(pipeline, MODEL_OUTPUT_PATH)
     print(f"Model saved to {MODEL_OUTPUT_PATH}")
 
-    # Feature Importance
+    # Coefficients
     try:
         cat_encoder = pipeline.named_steps['preprocessor'].named_transformers_['cat']
         cat_feature_names = cat_encoder.get_feature_names_out(CATEGORICAL_FEATURES)
         all_feature_names = NUMERIC_FEATURES + list(cat_feature_names)
         
-        importances = gb.feature_importances_
-        feature_importance_df = pd.DataFrame({
+        coefs = lr.coef_[0]
+        coef_df = pd.DataFrame({
             'feature': all_feature_names,
-            'importance': importances
-        }).sort_values(by='importance', ascending=False)
+            'coefficient': coefs,
+            'abs_coefficient': [abs(c) for c in coefs]
+        }).sort_values(by='abs_coefficient', ascending=False)
         
-        feature_importance_df.to_csv(FEATURE_IMPORTANCE_PATH, index=False)
-        print("\nFeature Importances:")
-        print(feature_importance_df.head(10))
+        coef_df.to_csv(COEFFICIENTS_PATH, index=False)
+        print("\nTop Coefficients:")
+        print(coef_df.head(10))
         
     except Exception as e:
-        print(f"Error extracting feature importances: {e}")
+        print(f"Error extracting coefficients: {e}")
 
     # Save Metadata
     metadata = {
-        "model_name": "Gradient Boosting Maintenance Need Prediction (Synthetic Rule Reproduction)",
+        "model_name": "Logistic Regression Maintenance Need Prediction (Synthetic Rule Reproduction)",
         "target": TARGET_COLUMN,
         "feature_names": NUMERIC_FEATURES + CATEGORICAL_FEATURES,
         "numeric_features": NUMERIC_FEATURES,
@@ -148,9 +148,9 @@ def train():
         "test_sample_count": len(X_test),
         "random_state": RANDOM_STATE,
         "hyperparameters": {
-            "n_estimators": N_ESTIMATORS,
-            "learning_rate": LEARNING_RATE,
-            "max_depth": MAX_DEPTH
+            "max_iter": MAX_ITER,
+            "C": C_VALUE,
+            "solver": lr.solver
         },
         "evaluation_metrics": {
             "accuracy": acc,

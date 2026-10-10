@@ -5,10 +5,10 @@ import json
 # Add backend directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.ai_model.gradient_boosting.predict import predict as gb_predict
+from app.ai_model.logistic_regression.predict import predict as lr_predict
 
-def test_gb():
-    print("=== Gradient Boosting Direct Integration Test ===")
+def test_lr():
+    print("=== Logistic Regression Direct Integration Test ===")
     
     # 1. Valid Features
     valid_payload = {
@@ -21,12 +21,12 @@ def test_gb():
         "Road Type": "Arterial",
         "Asphalt Type": "HMA"
     }
-    res = gb_predict(valid_payload)
+    res = lr_predict(valid_payload)
     print("\n[+] Valid Features:")
     print(json.dumps(res, indent=2))
     
     # 2. Missing/Empty Features
-    res = gb_predict({})
+    res = lr_predict({})
     print("\n[+] Missing Features:")
     print(json.dumps(res, indent=2))
     
@@ -35,7 +35,7 @@ def test_gb():
         "PCI": 65.0,
         "AADT": 15000
     }
-    res = gb_predict(partial_payload)
+    res = lr_predict(partial_payload)
     print("\n[+] Partial Features:")
     print(json.dumps(res, indent=2))
 
@@ -50,9 +50,9 @@ def test_gb():
         "Road Type": "Arterial",
         "Asphalt Type": "HMA"
     }
-    res = gb_predict(invalid_payload)
+    res = lr_predict(invalid_payload)
     print("\n[+] Invalid Features (Type Mismatch):")
     print(json.dumps(res, indent=2))
 
 if __name__ == "__main__":
-    test_gb()
+    test_lr()

@@ -1,12 +1,12 @@
 import pandas as pd
 import joblib
-from app.ai_model.gradient_boosting.config import MODEL_OUTPUT_PATH, NUMERIC_FEATURES, CATEGORICAL_FEATURES
+from app.ai_model.logistic_regression.config import MODEL_OUTPUT_PATH, NUMERIC_FEATURES, CATEGORICAL_FEATURES
 
 def predict(features: dict):
     if not MODEL_OUTPUT_PATH.exists():
         return {
             "status": "not_available",
-            "reason": "Gradient Boosting model artifact not found."
+            "reason": "Logistic Regression model artifact not found."
         }
 
     try:
