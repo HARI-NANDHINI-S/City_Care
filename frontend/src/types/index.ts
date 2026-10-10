@@ -59,12 +59,13 @@ export interface BoundingBox {
 }
 
 export interface AIAnalysisResult {
-  issue_type: string;
-  confidence: number;
-  severity: SeverityLevel;
-  priority_score: number;
-  recommended_department: string;
-  recommended_department_code: string;
+  status: string;
+  issue_type: string | null;
+  confidence: number | null;
+  severity: SeverityLevel | null;
+  priority_score: number | null;
+  recommended_department: string | null;
+  recommended_department_code: string | null;
   bounding_boxes: BoundingBox[];
   defect_area_ratio: number;
   annotated_image_url?: string;

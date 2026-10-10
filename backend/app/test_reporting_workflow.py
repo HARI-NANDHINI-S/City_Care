@@ -18,7 +18,7 @@ def test_full_issue_reporting_workflow():
 
     # 1. Login Citizen to obtain JWT token
     login_res = client.post("/api/v1/auth/login", json={
-        "email": "citizen.test@civicvision.ai",
+        "email": "citizen.test2@civicvision.ai",
         "password": "Password@123"
     })
     assert login_res.status_code == 200, f"Login failed: {login_res.text}"

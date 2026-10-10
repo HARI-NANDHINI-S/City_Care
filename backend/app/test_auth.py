@@ -17,7 +17,7 @@ def test_authentication_suite():
     # 1. Test Registration
     citizen_reg_payload = {
         "full_name": "Test Citizen User",
-        "email": "citizen.test@civicvision.ai",
+        "email": "citizen.test2@civicvision.ai",
         "password": "Password@123",
         "role": "CITIZEN"
     }
@@ -33,7 +33,7 @@ def test_authentication_suite():
     # Register Admin & Officer for RBAC testing
     admin_reg_payload = {
         "full_name": "Test Admin User",
-        "email": "admin.test@civicvision.ai",
+        "email": "admin.test2@civicvision.ai",
         "password": "Password@123",
         "role": "ADMIN"
     }
@@ -41,7 +41,7 @@ def test_authentication_suite():
 
     officer_reg_payload = {
         "full_name": "Test Officer User",
-        "email": "officer.test@civicvision.ai",
+        "email": "officer.test2@civicvision.ai",
         "password": "Password@123",
         "role": "OFFICER"
     }
@@ -49,7 +49,7 @@ def test_authentication_suite():
 
     # 2. Test Successful Login
     res_login_citizen = client.post("/api/v1/auth/login", json={
-        "email": "citizen.test@civicvision.ai",
+        "email": "citizen.test2@civicvision.ai",
         "password": "Password@123"
     })
     
@@ -58,15 +58,15 @@ def test_authentication_suite():
     print("[+] 2. Login Test: PASSED (JWT Token Issued)")
 
     # Login Admin & Officer
-    res_login_admin = client.post("/api/v1/auth/login", json={"email": "admin.test@civicvision.ai", "password": "Password@123"})
+    res_login_admin = client.post("/api/v1/auth/login", json={"email": "admin.test2@civicvision.ai", "password": "Password@123"})
     admin_token = res_login_admin.json()["access_token"]
 
-    res_login_officer = client.post("/api/v1/auth/login", json={"email": "officer.test@civicvision.ai", "password": "Password@123"})
+    res_login_officer = client.post("/api/v1/auth/login", json={"email": "officer.test2@civicvision.ai", "password": "Password@123"})
     officer_token = res_login_officer.json()["access_token"]
 
     # 3. Test Invalid Login
     res_invalid_login = client.post("/api/v1/auth/login", json={
-        "email": "citizen.test@civicvision.ai",
+        "email": "citizen.test2@civicvision.ai",
         "password": "WrongPassword999"
     })
     assert res_invalid_login.status_code == 401, "Invalid login failed to reject"
@@ -76,7 +76,7 @@ def test_authentication_suite():
     headers_citizen = {"Authorization": f"Bearer {citizen_token}"}
     res_me = client.get("/api/v1/auth/me", headers=headers_citizen)
     assert res_me.status_code == 200, f"Protected /me endpoint failed: {res_me.text}"
-    assert res_me.json()["email"] == "citizen.test@civicvision.ai"
+    assert res_me.json()["email"] == "citizen.test2@civicvision.ai"
     print("[+] 4. Protected Route Access (/me): PASSED (200 OK)")
 
     # 5. Test Role-Based Access Control (RBAC)

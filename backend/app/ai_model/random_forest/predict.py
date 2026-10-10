@@ -1,6 +1,6 @@
 import pandas as pd
 import joblib
-from backend.app.ai_model.random_forest.config import MODEL_OUTPUT_PATH, NUMERIC_FEATURES, CATEGORICAL_FEATURES
+from app.ai_model.random_forest.config import MODEL_OUTPUT_PATH, NUMERIC_FEATURES, CATEGORICAL_FEATURES
 
 def predict(features: dict):
     if not MODEL_OUTPUT_PATH.exists():

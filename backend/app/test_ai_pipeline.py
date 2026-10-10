@@ -65,7 +65,7 @@ def test_class_mapping():
     empty_img = Image.new('RGB', (10, 10), color=(255, 255, 255))
     empty_img.save(test_img_path)
     
-    with patch("app.services.ai_service.yolo_predict") as mock_predict:
+    with patch("app.ai_model.yolo.predict.predict") as mock_predict:
         # Test Unknown Class
         mock_predict.return_value = {
             "status": "success",

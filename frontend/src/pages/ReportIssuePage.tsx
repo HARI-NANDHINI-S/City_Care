@@ -76,6 +76,10 @@ export const ReportIssuePage: React.FC = () => {
       setError('Please run AI analysis first before submitting.');
       return;
     }
+    if (aiResult.status === 'no_detection' || !aiResult.issue_type) {
+      setError('Cannot submit report. No supported defect was detected in the image.');
+      return;
+    }
     setSubmitting(true);
     setError('');
 
@@ -89,9 +93,9 @@ export const ReportIssuePage: React.FC = () => {
         address,
         original_image_url: aiResult.original_image_url,
         annotated_image_url: aiResult.annotated_image_url,
-        ai_confidence: aiResult.confidence,
-        severity: aiResult.severity,
-        priority_score: aiResult.priority_score,
+        ai_confidence: aiResult.confidence || 0,
+        severity: aiResult.severity || 'MEDIUM',
+        priority_score: aiResult.priority_score || 0,
         bounding_box_json: JSON.stringify(aiResult.bounding_boxes)
       });
 
@@ -236,6 +240,14 @@ export const ReportIssuePage: React.FC = () => {
                 <p className="text-sm font-semibold text-slate-400">Waiting for AI Output</p>
                 <p className="text-[11px] text-slate-500 mt-1 max-w-[220px]">Upload an image and run analysis to populate verification data.</p>
               </div>
+            ) : aiResult.status === 'no_detection' ? (
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-5 flex-1 flex flex-col">
+                 <div className="flex-1 flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-rose-500/30 rounded-xl bg-rose-500/5">
+                    <AlertCircle className="w-8 h-8 text-rose-400 mb-3" />
+                    <p className="text-sm font-semibold text-rose-400">No Supported Issue Detected</p>
+                    <p className="text-[11px] text-slate-400 mt-2 max-w-[220px]">The AI model could not confidently identify a supported civic defect (e.g. pothole, road damage) in this image. Please upload a clearer image.</p>
+                 </div>
+              </motion.div>
             ) : (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-5 flex-1 flex flex-col">
                 {/* AI Vision Payload Box */}
@@ -261,7 +273,7 @@ export const ReportIssuePage: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-[10px] font-mono text-slate-500 uppercase">AI Confidence</div>
-                      <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{(aiResult.confidence * 100).toFixed(1)}%</div>
+                      <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{(aiResult.confidence! * 100).toFixed(1)}%</div>
                     </div>
                     <div>
                       <div className="text-[10px] font-mono text-slate-500 uppercase">Severity Level</div>
@@ -292,7 +304,7 @@ export const ReportIssuePage: React.FC = () => {
                     <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add any details helpful for repair crews..."
                       className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-cyan-500/50 transition-colors" />
                   </div>
-                  <button onClick={handleSubmitReport} disabled={submitting}
+                  <button onClick={handleSubmitReport} disabled={submitting || aiResult.status === 'no_detection'}
                     className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4">
                     {submitting ? (
                       <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting Report...</>

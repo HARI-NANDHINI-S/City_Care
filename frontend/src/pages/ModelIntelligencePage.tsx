@@ -23,11 +23,11 @@ const detectionClasses = [
 ];
 
 const priorityFactors = [
-  { factor: 'AI Confidence Score', weight: '40%', desc: 'YOLO detection confidence from bounding box classification' },
-  { factor: 'Defect Severity', weight: '25%', desc: 'Pre-assigned severity weight by defect category class' },
-  { factor: 'Bounding Box Area', weight: '20%', desc: 'Relative defect size to image area (larger = more urgent)' },
-  { factor: 'Duplicate Reports', weight: '10%', desc: 'Haversine-clustered co-reported tickets boost score' },
-  { factor: 'Time Since Reported', weight: '5%', desc: 'Aging factor accumulates urgency over elapsed hours' },
+  { factor: 'Defect Severity (Category)', weight: '35%', desc: 'Pre-assigned severity weight by defect category class' },
+  { factor: 'AI Confidence Score', weight: '15%', desc: 'YOLO detection confidence from bounding box classification' },
+  { factor: 'Bounding Box Area', weight: '15%', desc: 'Relative defect size to image area (larger = more urgent)' },
+  { factor: 'Duplicate Reports', weight: '20%', desc: 'Haversine-clustered co-reported tickets boost score' },
+  { factor: 'Time Since Reported', weight: '15%', desc: 'Aging factor accumulates urgency over elapsed hours' },
 ];
 
 const severityColors: Record<string, string> = {
@@ -89,7 +89,7 @@ export const ModelIntelligencePage: React.FC = () => {
         <div className="bg-civic-card border border-civic-border rounded-2xl overflow-hidden">
           <div className="bg-civic-bg border-b border-civic-border px-5 py-3">
             <code className="text-xs font-mono text-cyan-300">
-              score = (confidence × 0.40) + (severity_weight × 0.25) + (bbox_area × 0.20) + (duplicate_factor × 0.10) + (aging_hours × 0.05)
+              score = (category_risk × 0.35) + (confidence × 0.15) + (bbox_area × 0.15) + (duplicate_factor × 0.20) + (aging_hours × 0.15)
             </code>
           </div>
           <div className="divide-y divide-civic-border">

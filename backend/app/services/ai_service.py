@@ -5,7 +5,6 @@ import random
 from typing import Dict, Any, List
 from PIL import Image
 import numpy as np
-from app.ai_model.yolo.predict import predict as yolo_predict
 
 try:
     import cv2
@@ -43,7 +42,11 @@ def analyze_issue_image(image_path: str) -> Dict[str, Any]:
     except Exception:
         width, height = 800, 600
 
-    yolo_result = yolo_predict(image_path)
+    try:
+        from app.ai_model.yolo.predict import predict as yolo_predict
+        yolo_result = yolo_predict(image_path)
+    except Exception as e:
+        yolo_result = {"status": "error", "reason": f"YOLO model failed to load or predict: {str(e)}"}
     
     if yolo_result.get("status") != "success":
         return {

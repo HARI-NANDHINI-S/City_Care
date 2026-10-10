@@ -73,6 +73,7 @@ def ml_predictions(issue_id: int, db: Session = Depends(get_db)):
     
     # We do not have contextual features in DB right now, so we honestly report not_available
     # and don't invent synthetic ones.
+    missing_features = ["PCI", "AADT", "Last Maintenance", "Average Rainfall", "Rutting", "IRI", "Road Type", "Asphalt Type"]
     
     return {
         "yolo": {
@@ -80,7 +81,7 @@ def ml_predictions(issue_id: int, db: Session = Depends(get_db)):
         },
         "random_forest": {
             "status": rf_status,
-            "reason": rf_reason
+            "reason": f"{rf_reason}. Missing features: {', '.join(missing_features)}."
         },
         "priority": {
             "level": issue.severity.value if issue.severity else "Unknown",
