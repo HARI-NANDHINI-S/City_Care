@@ -1,0 +1,43 @@
+{
+    "model_name": "Gradient Boosting Maintenance Need Prediction (Synthetic Rule Reproduction)",
+    "target": "Needs Maintenance",
+    "feature_names": [
+        "PCI",
+        "AADT",
+        "Last Maintenance",
+        "Average Rainfall",
+        "Rutting",
+        "IRI",
+        "Road Type",
+        "Asphalt Type"
+    ],
+    "numeric_features": [
+        "PCI",
+        "AADT",
+        "Last Maintenance",
+        "Average Rainfall",
+        "Rutting",
+        "IRI"
+    ],
+    "categorical_features": [
+        "Road Type",
+        "Asphalt Type"
+    ],
+    "training_sample_count": 80000,
+    "test_sample_count": 20000,
+    "random_state": 42,
+    "hyperparameters": {
+        "n_estimators": 100,
+        "learning_rate": 0.1,
+        "max_depth": 5
+    },
+    "evaluation_metrics": {
+        "accuracy": 0.9999,
+        "precision": 1.0,
+        "recall": 0.9998004788507582,
+        "f1_score": 0.9999002294722139
+    },
+    "dataset_filename": "ESC 12 Pavement Dataset.csv",
+    "trained_timestamp": "2026-10-10T19:42:17.420744",
+    "limitations": "Dataset uses synthetic rule-generated labels. Model is only valid as a rule-reproduction baseline."
+}

@@ -57,6 +57,7 @@ To verify the application logic independently of the constrained YOLO pipeline, 
 *   Frontend Handing of 503 HTTP / `no_detection` Rejections
 
 ### ✅ VERIFIED (ML Functional Integrity)
+*   **Gradient Boosting Maintenance Prediction**: Implemented and validated locally. Quarantined due to synthetic data. **(Status: Validated only as a synthetic rule-reproduction baseline. See `GRADIENT_BOOSTING_VALIDATION_REPORT.md`).**
 *   **Logistic Regression Maintenance Prediction**: Implemented and validated locally. Quarantined alongside other tree-based models due to synthetic data. **(Status: Validated only as a synthetic rule-reproduction baseline. See `LOGISTIC_REGRESSION_VALIDATION_REPORT.md`).**
 *   **Decision Tree Maintenance Prediction**: Implemented and validated to run locally. Like Random Forest, disconnected from live API due to missing environmental data. **(Status: Validated only as a synthetic rule-reproduction baseline. See `DECISION_TREE_VALIDATION_REPORT.md`).**
 *   **Random Forest Maintenance Prediction**: Validated to run locally. Safely disconnected from live API due to honest reporting of missing environmental DB features. **(Status: Validated only as a synthetic rule-reproduction baseline. See `RANDOM_FOREST_VALIDATION_REPORT.md` for full dataset audit and leakage analysis).**
