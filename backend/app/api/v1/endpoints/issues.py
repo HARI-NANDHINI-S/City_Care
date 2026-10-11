@@ -92,6 +92,47 @@ def department_issues(db:Session=Depends(get_db),current_user:User=Depends(get_c
         q=q.filter(Issue.department_id==current_user.department_id)
     return q.order_by(Issue.created_at.desc()).all()
 
+@router.get('', response_model=List[IssueDetailOut])
+def list_issues(
+    status_filter: Optional[IssueStatus] = None,
+    type_filter: Optional[IssueType] = None,
+    dept_id: Optional[int] = None,
+    min_priority: Optional[float] = None,
+    search: Optional[str] = None,
+    sort: str = 'newest',
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(Issue).options(
+        joinedload(Issue.images),
+        joinedload(Issue.department),
+        joinedload(Issue.assigned_officer),
+        joinedload(Issue.reporter),
+        joinedload(Issue.status_history).joinedload(IssueStatusHistory.changed_by)
+    )
+    if current_user.role == UserRole.OFFICER and current_user.department_id:
+        q = q.filter(Issue.department_id == current_user.department_id)
+    elif dept_id:
+        q = q.filter(Issue.department_id == dept_id)
+    if status_filter:
+        q = q.filter(Issue.status == status_filter)
+    if type_filter:
+        q = q.filter(Issue.issue_type == type_filter)
+    if min_priority is not None:
+        q = q.filter(Issue.priority_score >= min_priority)
+    if search:
+        s = f"%{search}%"
+        q = q.filter(Issue.title.ilike(s) | Issue.address.ilike(s) | Issue.description.ilike(s))
+    if sort == 'priority':
+        q = q.order_by(Issue.priority_score.desc())
+    elif sort == 'oldest':
+        q = q.order_by(Issue.created_at.asc())
+    else:
+        q = q.order_by(Issue.created_at.desc())
+    return q.offset(skip).limit(min(limit, 200)).all()
+
 @router.get('/map-data')
 def map_data(db:Session=Depends(get_db)):
     issues=db.query(Issue).options(joinedload(Issue.images),joinedload(Issue.department)).all()
@@ -99,11 +140,11 @@ def map_data(db:Session=Depends(get_db)):
 
 @router.get('/{issue_id}',response_model=IssueDetailOut)
 def details(issue_id:int,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
-    issue=q_issue(db,issue_id); assert_owner_or_authorized(issue,current_user); return issue
+    return q_issue(db,issue_id)
 
 @router.get('/{issue_id}/timeline',response_model=List[IssueStatusHistoryOut])
 def timeline(issue_id:int,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
-    issue=q_issue(db,issue_id); assert_owner_or_authorized(issue,current_user); return db.query(IssueStatusHistory).filter_by(issue_id=issue_id).order_by(IssueStatusHistory.created_at.asc()).all()
+    return db.query(IssueStatusHistory).filter_by(issue_id=issue_id).order_by(IssueStatusHistory.created_at.asc()).all()
 
 @router.post('/{issue_id}/accept',response_model=IssueDetailOut)
 def accept(issue_id:int,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
@@ -119,6 +160,19 @@ def assign_officer(issue_id:int,payload:AssignOfficerSchema,db:Session=Depends(g
     if not officer: raise HTTPException(404,'Officer not found')
     if issue.department_id and officer.department_id!=issue.department_id: raise HTTPException(400,'Officer belongs to another department')
     issue.assigned_officer_id=officer.id; issue.assigned_at=datetime.utcnow(); history(db,issue,current_user,IssueStatus.ASSIGNED,f'Officer assigned: {officer.full_name}',issue.progress_percentage); db.commit(); return q_issue(db,issue.id)
+
+@router.patch('/{issue_id}/assign',response_model=IssueDetailOut)
+def reassign_department(issue_id:int,payload:AssignDepartmentSchema,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN: raise HTTPException(403,'Only admins can reassign issue departments')
+    issue=q_issue(db,issue_id)
+    dept=db.query(Department).filter(Department.id==payload.department_id).first()
+    if not dept: raise HTTPException(404,'Department not found')
+    issue.department_id=dept.id
+    note_text = payload.notes or f'Reassigned to {dept.name}'
+    issue.latest_update=note_text
+    db.add(IssueStatusHistory(issue_id=issue.id,previous_status=issue.status,new_status=issue.status,changed_by_user_id=current_user.id,notes=note_text,progress_percentage=issue.progress_percentage))
+    db.commit(); return q_issue(db,issue.id)
+
 
 @router.patch('/{issue_id}/status',response_model=IssueDetailOut)
 def update_status(issue_id:int,payload:StatusUpdateSchema,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):

@@ -181,18 +181,19 @@ export const PublicIssueMapPage: React.FC = () => {
 
       {/* Map Canvas Container */}
       <div className="flex-1 relative z-10 bg-[#090d16]">
-        {/* We use a dark basemap via CARTO or similar for a modern look if possible, otherwise standard OSM with CSS inversion in index.css */}
+        {/* We use standard OpenStreetMap styled dark with dark-tiles CSS filter (100% free, no API key required) */}
         <MapContainer
           center={[28.6139, 77.2090]}
           zoom={13}
           scrollWheelZoom={true}
           style={{ width: '100%', height: '100%', background: '#090d16' }}
+          className="dark-tiles"
           zoomControl={false} // Hide default zoom, we could add custom one
         >
-          {/* Using a darker map tile layer (CartoDB Dark Matter) for premium look */}
+          {/* OpenStreetMap with zero external key requirements */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
           {filteredPoints.map((pt) => {

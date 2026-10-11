@@ -44,8 +44,26 @@ The existing model artifact was tested directly via Python API (`predict()`) byp
 ---
 
 ## Remaining Limitations & Blockers
-**BLOCKED FOR LIVE INTEGRATION**
-The Random Forest model cannot be integrated into live prediction workflows until:
-1.  An official municipal priority dataset containing non-synthetic maintenance targets is acquired.
-2.  The model is retrained on the real-world dataset.
-3.  The database schema is expanded to collect and store the required road-context variables (`PCI`, `Rutting`, `AADT`) for incoming civic issues.
+**BLOCKED FOR LIVE PRODUCTION INFERENCE**
+The Random Forest model cannot be deployed for live civic issue inference until:
+1.  An official Indian municipal priority dataset containing non-synthetic maintenance targets is acquired.
+2.  The live issue reporting database schema is expanded to collect contextual road vectors (`PCI`, `Rutting`, `AADT`).
+
+## Phase 6: Final Artifact Lifecycle & Input Validation Verification
+*   **Target & Task**: Continuous regression on International Roughness Index (`IRI`).
+*   **Pipeline Structure**: Verified full pipeline containing `ColumnTransformer` (`StandardScaler` for `DMI`, `OneHotEncoder(handle_unknown='ignore')` for `Pave_Type` & `FUNC_CLASS`) plus regressor.
+*   **Artifact State**: The existing artifact in `weights/random_forest.joblib` is from the legacy ESC 12 classification experiment; therefore, live API endpoints honestly report `not_trained` for the valid Ontario `IRI` regression task until manual training is executed.
+*   **Isolated Fixture Tests**: Tested without training using an isolated temporary fixture:
+    1. Valid types: Output valid prediction.
+    2. Missing/Partial attributes: Structured error returned (`Missing features`).
+    3. Type mismatch (String in numeric field): Safely trapped `ValueError`.
+    4. Unseen categorical values: Handled gracefully without error via `handle_unknown='ignore'`.
+    5. Corrupted artifacts: Trapped safely on deserialization.
+*   **Production Integrity**: Hashes for `yolo/weights/best.pt`, `civicsense.db`, and existing weights remained bit-for-bit identical before and after testing.
+
+## Manual Training Command
+```powershell
+cd E:\City_Care\backend
+python -m app.ai_model.train_tabular_models --model random_forest
+```
+

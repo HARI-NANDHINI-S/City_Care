@@ -41,8 +41,27 @@ The model artifact was verified directly via Python API (`backend/app/ai_model/d
 ---
 
 ## Remaining Limitations & Blockers
-**BLOCKED FOR LIVE INTEGRATION**
+**BLOCKED FOR LIVE PRODUCTION INFERENCE**
 The Decision Tree model exhibits the same blockers as the Random Forest model:
 1.  It requires an official municipal priority dataset featuring non-synthetic maintenance outcomes.
 2.  It requires the backend database schema to be expanded to collect the `PCI`/`Rutting`/`AADT` vectors dynamically.
-3.  Until these requirements are fulfilled, the model remains safely quarantined and will not be hooked up to the live `issues` API prediction endpoints.
+3.  Until these requirements are fulfilled, the model remains safely quarantined from live prediction endpoints.
+
+## Phase 5: Final Artifact Lifecycle & Input Validation Verification
+*   **Target & Task**: Continuous regression on International Roughness Index (`IRI`).
+*   **Pipeline Structure**: Verified full pipeline containing `ColumnTransformer` (`StandardScaler` for `DMI`, `OneHotEncoder(handle_unknown='ignore')` for `Pave_Type` & `FUNC_CLASS`) plus `DecisionTreeRegressor`.
+*   **Artifact State**: The existing artifact in `weights/decision_tree.joblib` is from the legacy ESC 12 classification experiment; therefore, live API endpoints honestly report `not_trained` for the valid Ontario `IRI` regression task until manual training is executed.
+*   **Isolated Fixture Tests**: Tested without training using an isolated temporary fixture:
+    1. Valid types: Output valid prediction.
+    2. Missing/Partial attributes: Structured error returned (`Missing features`).
+    3. Type mismatch (String in numeric field): Safely trapped `ValueError`.
+    4. Unseen categorical values: Handled gracefully without error via `handle_unknown='ignore'`.
+    5. Corrupted artifacts: Trapped safely on deserialization.
+*   **Production Integrity**: Hashes for `yolo/weights/best.pt`, `civicsense.db`, and existing weights remained bit-for-bit identical before and after testing.
+
+## Manual Training Command
+```powershell
+cd E:\City_Care\backend
+python -m app.ai_model.train_tabular_models --model decision_tree
+```
+

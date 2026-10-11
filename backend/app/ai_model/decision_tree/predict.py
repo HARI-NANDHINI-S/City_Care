@@ -25,16 +25,24 @@ def predict(features: dict):
         X = df[required_features]
         
         prediction_val = pipeline.predict(X)[0]
-        prediction_prob = pipeline.predict_proba(X)[0]
         
-        probability = float(prediction_prob[1] if prediction_val == 1 else prediction_prob[0])
-        
-        return {
-            "status": "success",
-            "prediction": int(prediction_val),
-            "label": "MAINTENANCE_REQUIRED" if prediction_val == 1 else "NO_MAINTENANCE",
-            "probability": probability
-        }
+        # Check if pipeline is a classifier or regressor
+        if hasattr(pipeline, "predict_proba"):
+            prediction_prob = pipeline.predict_proba(X)[0]
+            probability = float(prediction_prob[1] if prediction_val == 1 else prediction_prob[0])
+            return {
+                "status": "success",
+                "prediction": int(prediction_val),
+                "label": "MAINTENANCE_REQUIRED" if prediction_val == 1 else "NO_MAINTENANCE",
+                "probability": probability
+            }
+        else:
+            return {
+                "status": "success",
+                "prediction": float(prediction_val),
+                "target": "IRI",
+                "unit": "m/km"
+            }
 
     except Exception as e:
         return {

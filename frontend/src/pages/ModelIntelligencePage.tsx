@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, Target, Database, GitMerge, AlertCircle, CheckCircle, XCircle, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:8000/api/v1';
+import { mlService } from '../services/api';
 
 export const ModelIntelligencePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'datasets' | 'pipeline'>('overview');
@@ -15,24 +14,23 @@ export const ModelIntelligencePage: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [dsRes, modRes] = await Promise.all([
-          fetch(`${API_URL}/ml/lab/datasets`),
-          fetch(`${API_URL}/ml/lab/models`)
+        const [dsData, modData] = await Promise.all([
+          mlService.getLabDatasets(),
+          mlService.getLabModels()
         ]);
         
-        if (!dsRes.ok || !modRes.ok) throw new Error("Failed to fetch lab data");
-        
-        setDatasets(await dsRes.json());
-        setModels(await modRes.json());
+        setDatasets(dsData);
+        setModels(modData);
         setError(null);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.response?.data?.detail || err.message || "Failed to fetch lab data");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
   }, []);
+
 
   return (
     <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">

@@ -28,14 +28,12 @@ from app.ai_model.gradient_boosting.config import (
 )
 
 def train():
-    print("=== Gradient Boosting Model Training (Label Reproduction Experiment) ===")
-    print("WARNING: As established in the Random Forest audit, this dataset contains")
-    print("synthetic labels. This training process serves only as a rule-reproduction")
-    print("baseline, not proof of real-world predictive ability.")
-    
-    if not DATASET_PATH.exists():
-        print(f"Dataset not found at {DATASET_PATH}")
-        return
+    print("=== Gradient Boosting Model Training ===")
+    print("\n[BLOCKED] Training aborted for Gradient Boosting.")
+    print("Reason: The target 'Needs Maintenance' in 'ESC 12 Pavement Dataset.csv' is synthetically derived via deterministic thresholds.")
+    print("Training is blocked to prevent learning artificial rules and generating invalid metrics.")
+    print("An authentic municipal dataset with un-derived ground-truth maintenance logs is required.")
+    return
 
     print("Loading dataset...")
     df = pd.read_csv(DATASET_PATH)

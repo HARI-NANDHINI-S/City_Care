@@ -1,0 +1,24 @@
+{
+  "dataset_name": "Pavement condition for provincial highways (2023)",
+  "source": "Ontario Data Catalogue",
+  "source_url": "https://data.ontario.ca/dataset/01dfc06c-6ef0-4fd0-a010-8ba20e3c9d10/resource/3ebf51cf-f457-4a17-a297-2d9fe01c5dbe/download/2023_opendata.csv",
+  "license": "Open Government Licence - Ontario",
+  "country": "Canada",
+  "region": "Ontario",
+  "collection_period": "2023",
+  "row_count": 1890,
+  "column_count": 12,
+  "columns": [
+    "SectionID", "Highway", "DIR", "FROM_Distance", "TO_Distance", "PCI", "DMI", "IRI", "Pave_Type", "Pavement_Section_From", "Pavement_Section_To", "FUNC_CLASS"
+  ],
+  "target_variables": ["PCI", "DMI", "IRI", "Pave_Type"],
+  "target_meaning": "PCI (0-100 overall condition), DMI (Distress Manifestation Index), IRI (International Roughness Index), Pave_Type (Pavement material type e.g., Asphalt Concrete).",
+  "suitability": {
+    "random_forest": true,
+    "decision_tree": true,
+    "logistic_regression": true,
+    "gradient_boosting": true
+  },
+  "limitations": "Since Indian sources are not publicly available as CSV, this Ontario dataset acts as the fallback. It provides genuine physical distress indices and material types, enabling mathematically sound and non-leaky prediction tasks. Note: 'SectionID ' is entirely blank because Ontario transitioned away from static LHRS references in favor of dynamic continuous distances post-2018. Overlapping and duplicate spatial intervals are legitimate distinct lane measurements (express/collector/passing).",
+  "data_dictionary_url": "https://data.ontario.ca/dataset/01dfc06c-6ef0-4fd0-a010-8ba20e3c9d10/resource/6875fad4-cbec-4d8a-827b-a17df9f5d60b/download/pavement_condition_data_dictionary.docx"
+}

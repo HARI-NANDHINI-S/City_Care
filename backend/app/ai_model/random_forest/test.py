@@ -1,7 +1,13 @@
+import os
+import sys
 import unittest
 import pandas as pd
-from backend.app.ai_model.random_forest.config import DATASET_PATH, MODEL_OUTPUT_PATH, NUMERIC_FEATURES, CATEGORICAL_FEATURES, TARGET_COLUMN
-from backend.app.ai_model.random_forest.predict import predict
+
+# Add backend directory to sys.path if not present
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+
+from app.ai_model.random_forest.config import DATASET_PATH, MODEL_OUTPUT_PATH, NUMERIC_FEATURES, CATEGORICAL_FEATURES, TARGET_COLUMN
+from app.ai_model.random_forest.predict import predict
 
 class TestRandomForestModule(unittest.TestCase):
     

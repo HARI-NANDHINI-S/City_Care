@@ -144,3 +144,9 @@ export const officerService = {
   resolve: async (id:number) => (await api.post<Issue>(`/issues/${id}/resolve`)).data,
   close: async (id:number) => (await api.post<Issue>(`/issues/${id}/close`)).data,
 };
+
+export const mlService = {
+  getLabDatasets: async () => (await api.get<any[]>('/ml/lab/datasets')).data,
+  getLabModels: async () => (await api.get<any[]>('/ml/lab/models')).data,
+};
+

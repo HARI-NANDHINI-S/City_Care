@@ -49,8 +49,15 @@ The model artifact was verified securely via Python API integration tests (`back
 ---
 
 ## Remaining Limitations & Blockers
-**BLOCKED FOR LIVE INTEGRATION**
-The Logistic Regression model, alongside Random Forest and Decision Tree, remains blocked from live deployment due to:
-1.  Absolute dependency on the collection of genuine (non-synthetic) municipal target observations.
+**BLOCKED FOR LIVE PRODUCTION INFERENCE**
+The Logistic Regression model remains blocked from live deployment due to:
+1.  Target leakage in the synthetic `Needs Maintenance` dataset (mathematically reverse-engineers threshold formulas).
 2.  Database schema incompatibility (real issues lack `PCI`, `AADT`, `Rutting` contexts).
 3.  The model is quarantined and returns structured unavailability indicators rather than predicting randomly.
+
+## Manual Training Pipeline Status
+- **Pipeline:** `backend/app/ai_model/logistic_regression/train.py`
+- **Manual Status:** **STRICTLY BLOCKED**
+- **Enforcement:** Running `python -m app.ai_model.train_tabular_models --model logistic_regression` exits with status code 1 and aborts.
+- **Reason:** Prevent reverse-engineering synthetic target rules on `ESC 12 Pavement Dataset.csv`. Real municipal maintenance log data is required before unblocking.
+

@@ -82,6 +82,19 @@ def root():
     }
 
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/docs", include_in_schema=False)
+def docs_redirect():
+    return RedirectResponse(url=f"{settings.API_V1_STR}/docs")
+
+
+@app.get("/redoc", include_in_schema=False)
+def redoc_redirect():
+    return RedirectResponse(url=f"{settings.API_V1_STR}/redoc")
+
+
+
 # --------------------------------------------------
 # Health Check
 # --------------------------------------------------

@@ -23,6 +23,7 @@ class IssueDetailOut(BaseModel):
 class DashboardStats(BaseModel): total_issues:int; under_review:int; assigned:int; in_progress:int; resolved:int; high_priority:int
 class UpdateProgressSchema(BaseModel): progress_percentage:int=Field(ge=0,le=100); note:Optional[str]=None
 class AssignOfficerSchema(BaseModel): officer_id:int
+class AssignDepartmentSchema(BaseModel): department_id:int; notes:Optional[str]=None
 class RejectIssueSchema(BaseModel): reason:str=Field(min_length=3,max_length=2000)
 class UpdateEstimateSchema(BaseModel): estimated_completion_date:datetime
 class StatusUpdateSchema(BaseModel): status:IssueStatus; notes:Optional[str]=None

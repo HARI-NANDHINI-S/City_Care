@@ -49,8 +49,15 @@ The model artifact was verified securely via Python API integration tests (`back
 ---
 
 ## Remaining Limitations & Blockers
-**BLOCKED FOR LIVE INTEGRATION**
+**BLOCKED FOR LIVE PRODUCTION INFERENCE**
 The Gradient Boosting model remains blocked from live deployment due to:
-1.  Dependency on genuine (non-synthetic) municipal target observations.
+1.  Target leakage in the synthetic `Needs Maintenance` dataset (mathematically reverse-engineers threshold formulas).
 2.  Database schema incompatibility (real issues lack `PCI`, `AADT`, `Rutting` contexts).
-3.  The model is quarantined and returns structured unavailability indicators securely, just like the other baseline models.
+3.  The model is quarantined and returns structured unavailability indicators securely.
+
+## Manual Training Pipeline Status
+- **Pipeline:** `backend/app/ai_model/gradient_boosting/train.py`
+- **Manual Status:** **STRICTLY BLOCKED**
+- **Enforcement:** Running `python -m app.ai_model.train_tabular_models --model gradient_boosting` exits with status code 1 and aborts.
+- **Reason:** Prevent reverse-engineering synthetic target rules on `ESC 12 Pavement Dataset.csv`. Real municipal maintenance log data is required before unblocking.
+
