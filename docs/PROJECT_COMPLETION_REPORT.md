@@ -132,6 +132,8 @@ In compliance with project requirements, **no model training was executed**. Eac
 6. **Final Tabular Artifact Lifecycle & Input Validation Verification:**
    - **Target & Task**: Continuous regression on International Roughness Index (`IRI`).
    - **Features & Pipeline**: Preprocessing ColumnTransformer (`StandardScaler` on `DMI`, `OneHotEncoder(handle_unknown='ignore')` on `Pave_Type` and `FUNC_CLASS`) plus regressor estimator verified as saved/loaded end-to-end.
+   - **Legacy Artifact Quarantine**: The preexisting `.joblib` files under `random_forest/weights/` and `decision_tree/weights/` originate from the synthetic ESC 12 dataset (`Needs Maintenance`). Both `predict.py` modules now execute `is_valid_ontario_artifact()` which checks `target == "IRI"` and rejects ESC 12 datasets, returning `"status": "not_available"`.
+   - **Atomic Staging & Recovery**: `train_tabular_models.py` uses temporary staging directories and validates deserialization before replacing production weights, preserving `.backup` files to ensure failed runs cannot corrupt weights or metadata.
    - **Isolated Fixture Testing**: Verified via temporary isolated fixtures (without fitting data or placing files in production weights dirs):
      - Valid inputs: Predicts continuous IRI value.
      - Missing features: Returns structured `{"status": "error", "reason": "Missing features: [...]"}`.

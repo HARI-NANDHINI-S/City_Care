@@ -71,7 +71,13 @@ export const ModelIntelligencePage: React.FC = () => {
                 <div key={m.id} className="bg-civic-card border border-civic-border rounded-xl p-5 hover:border-slate-600 transition-colors">
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-lg font-bold text-white">{m.name}</h3>
-                    <span className="px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded text-[10px] font-mono uppercase">{m.readiness}</span>
+                    <span className={`px-2 py-1 rounded text-[10px] font-mono uppercase border ${
+                      m.readiness === 'TRAINED_AND_AVAILABLE' || m.training_status === 'TRAINED'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                    }`}>
+                      {m.readiness}
+                    </span>
                   </div>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
@@ -88,8 +94,29 @@ export const ModelIntelligencePage: React.FC = () => {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">Status</span>
-                      <span className="text-slate-400 text-xs font-mono">{m.training_status}</span>
+                      <span className={`text-xs font-mono font-semibold ${m.training_status === 'TRAINED' ? 'text-emerald-400' : 'text-slate-400'}`}>{m.training_status}</span>
                     </div>
+
+                    {/* Verified Metrics Display if available */}
+                    {m.metrics && (
+                      <div className="pt-2 border-t border-civic-border">
+                        <span className="text-xs text-slate-400 font-medium block mb-1.5">Verified Evaluation Metrics:</span>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-civic-bg p-2 rounded border border-civic-border text-center">
+                            <span className="text-[10px] text-slate-500 uppercase block">MAE</span>
+                            <span className="text-xs font-mono text-emerald-400 font-bold">{typeof m.metrics.MAE === 'number' ? m.metrics.MAE.toFixed(4) : m.metrics.MAE}</span>
+                          </div>
+                          <div className="bg-civic-bg p-2 rounded border border-civic-border text-center">
+                            <span className="text-[10px] text-slate-500 uppercase block">RMSE</span>
+                            <span className="text-xs font-mono text-emerald-400 font-bold">{typeof m.metrics.RMSE === 'number' ? m.metrics.RMSE.toFixed(4) : m.metrics.RMSE}</span>
+                          </div>
+                          <div className="bg-civic-bg p-2 rounded border border-civic-border text-center">
+                            <span className="text-[10px] text-slate-500 uppercase block">R² Score</span>
+                            <span className="text-xs font-mono text-emerald-400 font-bold">{typeof m.metrics.R2 === 'number' ? m.metrics.R2.toFixed(4) : m.metrics.R2}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-4 pt-4 border-t border-civic-border">
                     <p className="text-xs text-slate-400 font-medium mb-2">Required Features:</p>
@@ -97,8 +124,17 @@ export const ModelIntelligencePage: React.FC = () => {
                       {m.features.map((f: string) => <span key={f} className="px-2 py-0.5 bg-civic-bg border border-civic-border rounded text-[10px] text-slate-300">{f}</span>)}
                     </div>
                   </div>
-                  <div className="mt-4 p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
-                    <div className="text-[10px] uppercase text-red-400 font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Action Required</div>
+                  <div className={`mt-4 p-3 rounded-lg border ${
+                    m.training_status === 'TRAINED'
+                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : 'bg-red-500/5 border-red-500/20'
+                  }`}>
+                    <div className={`text-[10px] uppercase font-bold mb-1 flex items-center gap-1 ${
+                      m.training_status === 'TRAINED' ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      {m.training_status === 'TRAINED' ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                      {m.training_status === 'TRAINED' ? 'Verified Status' : 'Action Required'}
+                    </div>
                     <p className="text-xs text-slate-300">{m.next_action}</p>
                   </div>
                 </div>
