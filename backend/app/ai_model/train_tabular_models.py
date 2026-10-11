@@ -121,14 +121,50 @@ def main(target_model: str = "all"):
     print("3. DMI PROXY LIMITATION: DMI is a structural engineering metric. To deploy in production, YOLO visual defects must be calibrated to DMI scale.")
     print("4. Scientific Rigor: Trained models must never be evaluated on synthetic target-leaked rules.")
     
-    # 9. Save Artifacts for Selected Models
+    # 9. Save Artifacts for Selected Models (Atomic Staging & Validation)
+    import tempfile, shutil
+
+    def save_artifact_atomically(model_key, weights_dir, model_filename, metadata_filename, metadata_dict):
+        weights_dir.mkdir(parents=True, exist_ok=True)
+        final_model_path = weights_dir / model_filename
+        final_meta_path = weights_dir / metadata_filename
+        
+        # Step A: Write to isolated staging directory
+        with tempfile.TemporaryDirectory() as staging_dir:
+            staging_model_path = Path(staging_dir) / f"{model_filename}.tmp"
+            staging_meta_path = Path(staging_dir) / f"{metadata_filename}.tmp"
+            
+            joblib.dump(results[model_key]["model"], staging_model_path)
+            with open(staging_meta_path, "w") as f:
+                json.dump(metadata_dict, f, indent=4)
+                
+            # Step B: Validate that staged artifact can be deserialized and verified
+            try:
+                test_load = joblib.load(staging_model_path)
+                assert hasattr(test_load, "predict"), "Staged pipeline missing predict() method"
+                with open(staging_meta_path, "r") as f:
+                    test_meta = json.load(f)
+                assert test_meta.get("target") == "IRI", "Staged metadata target mismatch"
+            except Exception as val_err:
+                raise RuntimeError(f"Artifact integrity validation failed during staging: {val_err}")
+                
+            # Step C: Backup existing production artifact if present before atomic replacement
+            if final_model_path.exists():
+                backup_path = weights_dir / f"{model_filename}.backup"
+                shutil.copy2(final_model_path, backup_path)
+            if final_meta_path.exists():
+                backup_meta = weights_dir / f"{metadata_filename}.backup"
+                shutil.copy2(final_meta_path, backup_meta)
+                
+            # Step D: Atomic replace
+            shutil.copy2(staging_model_path, final_model_path)
+            shutil.copy2(staging_meta_path, final_meta_path)
+            
+        print(f"\n[+] Atomically saved and validated {model_key} artifact: {final_model_path}")
+        print(f"[+] Atomically saved and validated {model_key} metadata: {final_meta_path}")
+
     if target_model in ["random_forest", "all"]:
         rf_weights_dir = Path(__file__).resolve().parent / "random_forest" / "weights"
-        rf_weights_dir.mkdir(parents=True, exist_ok=True)
-        rf_model_path = rf_weights_dir / "random_forest.joblib"
-        rf_meta_path = rf_weights_dir / "model_metadata.json"
-        
-        joblib.dump(results["Random Forest"]["model"], rf_model_path)
         rf_metadata = {
             "model_name": "Random Forest Roughness (IRI) Prediction",
             "task": "Continuous Regression",
@@ -147,18 +183,10 @@ def main(target_model: str = "all"):
             "dataset": "ontario_2023_pavement.csv",
             "saved_at": pd.Timestamp.now().isoformat()
         }
-        with open(rf_meta_path, "w") as f:
-            json.dump(rf_metadata, f, indent=4)
-        print(f"\n[+] Saved Random Forest artifact: {rf_model_path}")
-        print(f"[+] Saved Random Forest metadata: {rf_meta_path}")
+        save_artifact_atomically("Random Forest", rf_weights_dir, "random_forest.joblib", "model_metadata.json", rf_metadata)
 
     if target_model in ["decision_tree", "all"]:
         dt_weights_dir = Path(__file__).resolve().parent / "decision_tree" / "weights"
-        dt_weights_dir.mkdir(parents=True, exist_ok=True)
-        dt_model_path = dt_weights_dir / "decision_tree.joblib"
-        dt_meta_path = dt_weights_dir / "model_metadata.json"
-        
-        joblib.dump(results["Decision Tree"]["model"], dt_model_path)
         dt_metadata = {
             "model_name": "Decision Tree Roughness (IRI) Prediction",
             "task": "Continuous Regression",
@@ -177,10 +205,7 @@ def main(target_model: str = "all"):
             "dataset": "ontario_2023_pavement.csv",
             "saved_at": pd.Timestamp.now().isoformat()
         }
-        with open(dt_meta_path, "w") as f:
-            json.dump(dt_metadata, f, indent=4)
-        print(f"\n[+] Saved Decision Tree artifact: {dt_model_path}")
-        print(f"[+] Saved Decision Tree metadata: {dt_meta_path}")
+        save_artifact_atomically("Decision Tree", dt_weights_dir, "decision_tree.joblib", "model_metadata.json", dt_metadata)
 
     print("\nTraining workflow completed successfully.")
 

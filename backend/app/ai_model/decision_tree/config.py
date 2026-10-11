@@ -3,7 +3,8 @@ from pathlib import Path
 
 # Project root path resolution
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
-DATASET_PATH = BASE_DIR / "datasets" / "priority" / "ESC 12 Pavement Dataset.csv"
+DATASET_PATH = BASE_DIR / "datasets" / "priority" / "international_road_condition" / "raw" / "ontario_2023_pavement.csv"
+LEGACY_DATASET_PATH = BASE_DIR / "datasets" / "priority" / "ESC 12 Pavement Dataset.csv"
 
 WEIGHTS_DIR = Path(__file__).resolve().parent / "weights"
 MODEL_OUTPUT_PATH = WEIGHTS_DIR / "decision_tree.joblib"
@@ -12,22 +13,23 @@ FEATURE_IMPORTANCE_PATH = WEIGHTS_DIR / "feature_importance.csv"
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
-MAX_DEPTH = 10
+MAX_DEPTH = 5
 MIN_SAMPLES_SPLIT = 10
 MIN_SAMPLES_LEAF = 4
 
+# Valid Ontario Roughness (IRI) Prediction Features
 NUMERIC_FEATURES = [
-    "PCI",
-    "AADT",
-    "Last Maintenance",
-    "Average Rainfall",
-    "Rutting",
-    "IRI"
+    "DMI"
 ]
 
 CATEGORICAL_FEATURES = [
-    "Road Type",
-    "Asphalt Type"
+    "Pave_Type",
+    "FUNC_CLASS"
 ]
 
-TARGET_COLUMN = "Needs Maintenance"
+TARGET_COLUMN = "IRI"
+
+# Legacy features for quarantine recognition
+LEGACY_NUMERIC_FEATURES = ["PCI", "AADT", "Last Maintenance", "Average Rainfall", "Rutting", "IRI"]
+LEGACY_CATEGORICAL_FEATURES = ["Road Type", "Asphalt Type"]
+LEGACY_TARGET_COLUMN = "Needs Maintenance"

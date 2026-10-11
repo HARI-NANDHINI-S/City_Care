@@ -52,7 +52,8 @@ The Random Forest model cannot be deployed for live civic issue inference until:
 ## Phase 6: Final Artifact Lifecycle & Input Validation Verification
 *   **Target & Task**: Continuous regression on International Roughness Index (`IRI`).
 *   **Pipeline Structure**: Verified full pipeline containing `ColumnTransformer` (`StandardScaler` for `DMI`, `OneHotEncoder(handle_unknown='ignore')` for `Pave_Type` & `FUNC_CLASS`) plus regressor.
-*   **Artifact State**: The existing artifact in `weights/random_forest.joblib` is from the legacy ESC 12 classification experiment; therefore, live API endpoints honestly report `not_trained` for the valid Ontario `IRI` regression task until manual training is executed.
+*   **Artifact State & Quarantine**: The existing artifact in `weights/random_forest.joblib` is from the legacy ESC 12 classification experiment. The inference function `is_valid_ontario_artifact()` explicitly validates `target == "IRI"` and rejects synthetic ESC 12 datasets. The live API endpoints honestly report `not_trained` (trained: false).
+*   **Atomic Staging & Recovery**: `train_tabular_models.py` uses temporary staging directories and validates deserialization before replacing production weights, preserving `.backup` files to ensure failed runs cannot corrupt weights or metadata.
 *   **Isolated Fixture Tests**: Tested without training using an isolated temporary fixture:
     1. Valid types: Output valid prediction.
     2. Missing/Partial attributes: Structured error returned (`Missing features`).

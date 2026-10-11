@@ -1,0 +1,43 @@
+{
+    "model_name": "Random Forest Maintenance Need Prediction",
+    "target": "Needs Maintenance",
+    "feature_names": [
+        "PCI",
+        "AADT",
+        "Last Maintenance",
+        "Average Rainfall",
+        "Rutting",
+        "IRI",
+        "Road Type",
+        "Asphalt Type"
+    ],
+    "numeric_features": [
+        "PCI",
+        "AADT",
+        "Last Maintenance",
+        "Average Rainfall",
+        "Rutting",
+        "IRI"
+    ],
+    "categorical_features": [
+        "Road Type",
+        "Asphalt Type"
+    ],
+    "training_sample_count": 840000,
+    "test_sample_count": 210000,
+    "random_state": 42,
+    "hyperparameters": {
+        "n_estimators": 200,
+        "max_depth": 20,
+        "min_samples_split": 10,
+        "min_samples_leaf": 4
+    },
+    "evaluation_metrics": {
+        "accuracy": 0.999995238095238,
+        "precision": 1.0,
+        "recall": 0.9999904738316154,
+        "f1_score": 0.9999952368931206
+    },
+    "dataset_filename": "ESC 12 Pavement Dataset.csv",
+    "trained_timestamp": "2026-10-07T11:03:05.519092"
+}
