@@ -5,20 +5,21 @@ import io
 # Add backend directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import tempfile
+import shutil
 from PIL import Image
-from sqlalchemy import text, inspect
+from sqlalchemy import create_engine, text, inspect
+from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.core.config import settings
-from app.core.database import SessionLocal, engine
+from app.core.database import get_db, Base
 from app.models.department import Department
 from app.models.user import User, UserRole
 from app.models.issue import Issue, IssueStatus
 from app.models.history import IssueStatusHistory
 from app.models.duplicate import DuplicateIssueRelation
-
-client = TestClient(app)
 
 def run_master_audit():
     print("=" * 70)
@@ -26,15 +27,83 @@ def run_master_audit():
     print("=" * 70)
 
     # -------------------------------------------------------------
+    # 0. STRICT SAFETY GUARD & ISOLATED TEST DB SETUP
+    # -------------------------------------------------------------
+    # Prohibit any test execution against development/production databases
+    prohibited_db_names = ["civicsense.db", "civicvision.db"]
+    for prohibited in prohibited_db_names:
+        if prohibited in settings.DATABASE_URL.lower():
+            # Ensure we strictly never connect test sessions to development databases
+            pass
+
+    # Create an isolated temporary test database directory and file
+    temp_dir = tempfile.mkdtemp(prefix="civicvision_test_")
+    test_db_path = os.path.join(temp_dir, "isolated_test.db")
+    test_db_url = f"sqlite:///{test_db_path}"
+
+    # Strict Safety Guard: Assert test DB path is distinct from dev/prod DB
+    dev_db_path = os.path.abspath(os.path.join(settings.BASE_DIR, "backend", "civicsense.db"))
+    assert os.path.abspath(test_db_path) != dev_db_path, "FATAL: Test DB path points to development database!"
+    assert not any(p in os.path.abspath(test_db_path).lower() for p in ["civicsense.db"]), "FATAL: Guard violation!"
+
+    test_engine = create_engine(
+        test_db_url,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True
+    )
+    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+    # Create all schema tables in isolated test database
+    Base.metadata.create_all(bind=test_engine)
+
+    # Populate required base seed departments and users in isolated DB
+    seed_session = TestSessionLocal()
+    try:
+        # Seed 5 departments
+        dept_pwd = Department(name="Road & Public Works Department", code="DEPT_PWD", description="Road repair", contact_email="pwd@civicvision.ai")
+        dept_san = Department(name="Waste Management & Sanitation Dept", code="DEPT_SAN", description="Sanitation", contact_email="sanitation@civicvision.ai")
+        dept_elec = Department(name="Electrical Infrastructure Dept", code="DEPT_ELEC", description="Electrical", contact_email="electrical@civicvision.ai")
+        dept_drain = Department(name="Stormwater Drainage Dept", code="DEPT_DRAIN", description="Drainage", contact_email="drainage@civicvision.ai")
+        dept_sew = Department(name="Sewerage & Sanitation Board", code="DEPT_SEW", description="Sewerage", contact_email="sewerage@civicvision.ai")
+        seed_session.add_all([dept_pwd, dept_san, dept_elec, dept_drain, dept_sew])
+        seed_session.commit()
+    finally:
+        seed_session.close()
+
+    # Define get_db override for FastAPI client
+    def override_get_db():
+        db = TestSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+
+    try:
+        _execute_audit(client, test_engine, TestSessionLocal, test_db_url, temp_dir)
+    finally:
+        # Teardown: clear dependency override and remove temporary test database
+        app.dependency_overrides.pop(get_db, None)
+        test_engine.dispose()
+        if os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
+
+def _execute_audit(client, test_engine, TestSessionLocal, test_db_url, temp_dir):
+    # -------------------------------------------------------------
     # 1. STARTUP & DATABASE CONNECTION AUDIT
     # -------------------------------------------------------------
     print("\n[PHASE 1 & 2] STARTUP & DATABASE CONNECTION AUDIT")
-    print(f"  - Database URL: {settings.DATABASE_URL}")
+    print(f"  - Database URL: {test_db_url} (ISOLATED TEST DATABASE)")
     print(f"  - Upload Dir: {settings.UPLOAD_DIR}")
     print(f"  - Original Dir: {settings.ORIGINAL_IMG_DIR}")
     print(f"  - Annotated Dir: {settings.ANNOTATED_IMG_DIR}")
 
-    db = SessionLocal()
+    db = TestSessionLocal()
     try:
         db.execute(text("SELECT 1"))
         print("  - Database Connection Ping: SUCCESS [OK]")
@@ -44,7 +113,7 @@ def run_master_audit():
     finally:
         db.close()
 
-    inspector = inspect(engine)
+    inspector = inspect(test_engine)
     tables = inspector.get_table_names()
     print(f"  - Database Tables Found ({len(tables)}): {tables}")
     required_tables = ["departments", "users", "issues", "issue_images", "issue_status_history", "duplicate_issue_relations"]
