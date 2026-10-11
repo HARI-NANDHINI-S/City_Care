@@ -35,6 +35,9 @@ export const ReportIssuePage: React.FC = () => {
     setAiResult(null); // Reset AI result if image changes
   };
 
+  const [manualCategory, setManualCategory] = useState<string>('Pothole');
+  const [manualSeverity, setManualSeverity] = useState<string>('MEDIUM');
+
   const handleFetchLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -61,42 +64,60 @@ export const ReportIssuePage: React.FC = () => {
     try {
       const result = await issueService.analyzeImage(selectedFile);
       setAiResult(result);
-      if (!title) {
+      if (result.issue_type && !title) {
         setTitle(`Reported ${result.issue_type} near ${address.split(',')[0]}`);
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to analyze image with AI model.');
+      // Graceful fallback: set structured vision_unavailable state
+      setAiResult({
+        status: 'vision_unavailable',
+        message: err.response?.data?.detail || 'Automated AI vision model is currently unavailable on this host.',
+        original_image_url: imagePreview || '',
+        issue_type: null,
+        confidence: 0,
+        severity: null,
+        priority_score: 0,
+        recommended_department: null,
+        recommended_department_code: null,
+        bounding_boxes: [],
+        defect_area_ratio: 0
+      });
     } finally {
       setAnalyzing(false);
     }
   };
 
+  const isManualMode = aiResult && (aiResult.status === 'no_detection' || aiResult.status === 'vision_unavailable' || !aiResult.issue_type);
+
   const handleSubmitReport = async () => {
-    if (!aiResult) {
-      setError('Please run AI analysis first before submitting.');
+    if (!selectedFile && !aiResult?.original_image_url) {
+      setError('Please upload an infrastructure image first.');
       return;
     }
-    if (aiResult.status === 'no_detection' || !aiResult.issue_type) {
-      setError('Cannot submit report. No supported defect was detected in the image.');
+
+    const effectiveCategory = isManualMode ? manualCategory : aiResult?.issue_type;
+    if (!effectiveCategory) {
+      setError('Please select a valid defect category before submitting.');
       return;
     }
+
     setSubmitting(true);
     setError('');
 
     try {
       const createdIssue = await issueService.createIssue({
-        title: title || `${aiResult.issue_type} Defect Report`,
+        title: title || `${effectiveCategory} Report`,
         description,
-        issue_type: aiResult.issue_type,
+        issue_type: effectiveCategory,
         latitude,
         longitude,
         address,
-        original_image_url: aiResult.original_image_url,
-        annotated_image_url: aiResult.annotated_image_url,
-        ai_confidence: aiResult.confidence || 0,
-        severity: aiResult.severity || 'MEDIUM',
-        priority_score: aiResult.priority_score || 0,
-        bounding_box_json: JSON.stringify(aiResult.bounding_boxes)
+        original_image_url: aiResult?.original_image_url || imagePreview || '',
+        annotated_image_url: isManualMode ? undefined : aiResult?.annotated_image_url,
+        ai_confidence: isManualMode ? 0 : (aiResult?.confidence || 0),
+        severity: isManualMode ? manualSeverity : (aiResult?.severity || 'MEDIUM'),
+        priority_score: isManualMode ? 50.0 : (aiResult?.priority_score || 0),
+        bounding_box_json: isManualMode ? "[]" : JSON.stringify(aiResult?.bounding_boxes || [])
       });
 
       navigate(`/issue/${createdIssue.id}`);
@@ -240,13 +261,77 @@ export const ReportIssuePage: React.FC = () => {
                 <p className="text-sm font-semibold text-slate-400">Waiting for AI Output</p>
                 <p className="text-[11px] text-slate-500 mt-1 max-w-[220px]">Upload an image and run analysis to populate verification data.</p>
               </div>
-            ) : aiResult.status === 'no_detection' ? (
+            ) : isManualMode ? (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-5 flex-1 flex flex-col">
-                 <div className="flex-1 flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-rose-500/30 rounded-xl bg-rose-500/5">
-                    <AlertCircle className="w-8 h-8 text-rose-400 mb-3" />
-                    <p className="text-sm font-semibold text-rose-400">No Supported Issue Detected</p>
-                    <p className="text-[11px] text-slate-400 mt-2 max-w-[220px]">The AI model could not confidently identify a supported civic defect (e.g. pothole, road damage) in this image. Please upload a clearer image.</p>
-                 </div>
+                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                  <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-1">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Citizen Manual Fallback Mode</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {aiResult.status === 'vision_unavailable' 
+                      ? 'Automated AI vision is temporarily offline on this system. You can manually classify your issue below.' 
+                      : 'AI detected no standard highway defects in this photo. You can specify the civic issue category manually.'}
+                  </p>
+                </div>
+
+                {/* Manual Category Selection Box */}
+                <div className="bg-civic-bg border border-civic-border rounded-xl p-4 space-y-3">
+                  <div className="text-[10px] font-mono text-slate-500 flex items-center justify-between">
+                    <span>MANUAL_CLASSIFICATION</span>
+                    <span className="text-amber-400 font-mono">CITIZEN_REPORTED</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 uppercase mb-1 block">Defect Category *</label>
+                    <select
+                      value={manualCategory}
+                      onChange={(e) => setManualCategory(e.target.value)}
+                      className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    >
+                      <option value="Pothole">Pothole</option>
+                      <option value="Road Damage">Road Damage</option>
+                      <option value="Garbage Accumulation">Garbage Accumulation</option>
+                      <option value="Waterlogging">Waterlogging</option>
+                      <option value="Broken Streetlight">Broken Streetlight</option>
+                      <option value="Open Manhole">Open Manhole</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 uppercase mb-1 block">Observed Severity</label>
+                    <select
+                      value={manualSeverity}
+                      onChange={(e) => setManualSeverity(e.target.value)}
+                      className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    >
+                      <option value="LOW">LOW</option>
+                      <option value="MEDIUM">MEDIUM</option>
+                      <option value="HIGH">HIGH</option>
+                      <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Final Form */}
+                <div className="space-y-4 mt-auto">
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Issue Title</label>
+                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="E.g. Deep pothole on main road"
+                      className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Additional Context (Optional)</label>
+                    <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add any details helpful for repair crews..."
+                      className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-cyan-500/50 transition-colors" />
+                  </div>
+                  <button onClick={handleSubmitReport} disabled={submitting}
+                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-600 to-cyan-600 hover:from-amber-500 hover:to-cyan-500 text-white shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4">
+                    {submitting ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting Report...</>
+                    ) : (
+                      <>Submit Citizen Report <ArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+                </div>
               </motion.div>
             ) : (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-5 flex-1 flex flex-col">
@@ -304,7 +389,7 @@ export const ReportIssuePage: React.FC = () => {
                     <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add any details helpful for repair crews..."
                       className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-cyan-500/50 transition-colors" />
                   </div>
-                  <button onClick={handleSubmitReport} disabled={submitting || aiResult.status === 'no_detection'}
+                  <button onClick={handleSubmitReport} disabled={submitting}
                     className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4">
                     {submitting ? (
                       <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting Report...</>

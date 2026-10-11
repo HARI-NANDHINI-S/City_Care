@@ -272,6 +272,43 @@ def _execute_audit(client, test_engine, TestSessionLocal, test_db_url, temp_dir)
     print(f"  - Public Issue Map Payload (`/issues/map-data`): SUCCESS ({len(res_map.json())} points serialized) [OK]")
 
     # -------------------------------------------------------------
+    # 3B. CITIZEN MANUAL FALLBACK WORKFLOW AUDIT
+    # -------------------------------------------------------------
+    print("\n[PHASE 4B] CITIZEN MANUAL SUBMISSION & REASSIGNMENT AUDIT")
+    # Manual report submission without AI bounding boxes or AI confidence
+    manual_payload = {
+        "title": "Manual Citizen Reported Defect",
+        "description": "Citizen manual fallback when AI vision is offline or unconfident",
+        "issue_type": "Garbage Accumulation",
+        "latitude": 28.6150,
+        "longitude": 77.2100,
+        "address": "Market Sector 9 Corner",
+        "original_image_url": "fake_manual.jpg",
+        "annotated_image_url": None,
+        "ai_confidence": 0.0,
+        "severity": "MEDIUM",
+        "priority_score": 50.0,
+        "bounding_box_json": "[]"
+    }
+    res_manual = client.post("/api/v1/issues", json=manual_payload, headers=citizen_headers)
+    assert res_manual.status_code in [200, 201], f"Manual submission failed: {res_manual.text}"
+    manual_data = res_manual.json()
+    assert manual_data["status"] == "REPORTED", "Manual report must have initial status REPORTED, not AI_ANALYZED"
+    assert manual_data["ai_confidence"] == 0.0, "Manual report must have 0.0 AI confidence"
+    print("  - Citizen Manual Fallback Submission: SUCCESS (Issue #" + str(manual_data["id"]) + " created as REPORTED) [OK]")
+
+    # Admin Department Reassignment API Audit
+    res_reassign = client.patch(
+        f"/api/v1/issues/{manual_data['id']}/assign",
+        json={"department_id": 2, "notes": "Reassigned to Sanitation department for garbage clearance"},
+        headers=admin_headers
+    )
+    assert res_reassign.status_code == 200, f"Reassignment failed: {res_reassign.text}"
+    reassigned_issue = client.get(f"/api/v1/issues/{manual_data['id']}", headers=citizen_headers).json()
+    assert reassigned_issue["department"]["id"] == 2, "Department reassignment did not persist"
+    print("  - Department Reassignment & Auto-Refresh State: SUCCESS [OK]")
+
+    # -------------------------------------------------------------
     # 4. AI MODEL WEIGHTS AUDIT
     # -------------------------------------------------------------
     print("\n[PHASE 5] AI MODEL WEIGHTS AUDIT")

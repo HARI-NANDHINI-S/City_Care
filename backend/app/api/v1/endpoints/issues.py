@@ -47,11 +47,13 @@ def analyze_image(file:UploadFile=File(...), current_user:User=Depends(get_curre
     
     with open(path,'wb') as f: f.write(file.file.read())
     result=analyze_issue_image(path)
-    if result.get("error"):
-        raise HTTPException(status_code=503, detail=result["error"])
     result['original_image_url']=f'/uploads/original/{name}'
     ann=result.get('annotated_image_filename')
     result['annotated_image_url']=f'/uploads/annotated/{ann}' if ann else None
+    
+    if result.get("error"):
+        result['status'] = 'vision_unavailable'
+        result['message'] = result.get('reason') or result.get('error')
     return result
 
 @router.post('',response_model=IssueDetailOut)
@@ -60,12 +62,32 @@ def create_issue(payload:CreateIssueSchema,db:Session=Depends(get_db),current_us
     dept=None
     # route by department code/name already supplied by AI category
     from app.services.routing_service import get_recommended_department_code
-    dept=db.query(Department).filter(Department.code==get_recommended_department_code(payload.issue_type.value)).first()
-    issue=Issue(title=payload.title,description=payload.description,issue_type=payload.issue_type,latitude=payload.latitude,longitude=payload.longitude,address=payload.address,ai_confidence=payload.ai_confidence,severity=payload.severity,priority_score=payload.priority_score,status=IssueStatus.AI_ANALYZED,reporter_id=current_user.id,department_id=dept.id if dept else None,progress_percentage=0,latest_update='AI analysis completed and report submitted.')
+    # If issue has AI confidence, record AI_ANALYZED; if submitted manually or AI was unavailable, record as REPORTED
+    is_ai_detected = (payload.ai_confidence or 0) > 0 and bool(payload.bounding_box_json and payload.bounding_box_json != "[]")
+    initial_status = IssueStatus.AI_ANALYZED if is_ai_detected else IssueStatus.REPORTED
+    initial_note = 'AI analysis completed and report submitted.' if is_ai_detected else 'Report submitted with citizen-selected category.'
+
+    issue=Issue(
+        title=payload.title,
+        description=payload.description,
+        issue_type=payload.issue_type,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        address=payload.address,
+        ai_confidence=payload.ai_confidence,
+        severity=payload.severity,
+        priority_score=payload.priority_score,
+        status=initial_status,
+        reporter_id=current_user.id,
+        department_id=dept.id if dept else None,
+        progress_percentage=0,
+        latest_update=initial_note
+    )
     db.add(issue); db.flush()
     db.add(IssueImage(issue_id=issue.id,original_image_path=payload.original_image_url,annotated_image_path=payload.annotated_image_url,bounding_box_json=payload.bounding_box_json))
     db.add(IssueStatusHistory(issue_id=issue.id,previous_status=None,new_status=IssueStatus.REPORTED,changed_by_user_id=current_user.id,notes='Report submitted.',progress_percentage=0))
-    db.add(IssueStatusHistory(issue_id=issue.id,previous_status=IssueStatus.REPORTED,new_status=IssueStatus.AI_ANALYZED,changed_by_user_id=current_user.id,notes='AI analysis completed.',progress_percentage=0))
+    if is_ai_detected:
+        db.add(IssueStatusHistory(issue_id=issue.id,previous_status=IssueStatus.REPORTED,new_status=IssueStatus.AI_ANALYZED,changed_by_user_id=current_user.id,notes='AI analysis completed.',progress_percentage=0))
     db.commit(); return q_issue(db,issue.id)
 
 @router.get('/stats/citizen',response_model=DashboardStats)

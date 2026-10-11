@@ -26,10 +26,11 @@ export const IssueDetailsPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [selectedDeptId, setSelectedDeptId] = useState<number>(0);
   const [updating, setUpdating] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const fetchIssue = async () => {
+  const fetchIssue = async (silent: boolean = false) => {
     if (!id) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const data = await issueService.getIssueById(parseInt(id));
       setIssue(data);
@@ -38,7 +39,7 @@ export const IssueDetailsPage: React.FC = () => {
     } catch {
       setError('Failed to load issue details.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -50,12 +51,14 @@ export const IssueDetailsPage: React.FC = () => {
   const handleUpdateStatus = async () => {
     if (!issue) return;
     setUpdating(true);
+    setActionFeedback(null);
     try {
       await issueService.updateStatus(issue.id, newStatus, notes);
       setNotes('');
-      await fetchIssue();
+      await fetchIssue(true);
+      setActionFeedback({ type: 'success', message: `Status successfully updated to ${newStatus.replace(/_/g, ' ')}.` });
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to update status.');
+      setActionFeedback({ type: 'error', message: err.response?.data?.detail || 'Failed to update status.' });
     } finally {
       setUpdating(false);
     }
@@ -64,12 +67,15 @@ export const IssueDetailsPage: React.FC = () => {
   const handleAssignDepartment = async () => {
     if (!issue || !selectedDeptId) return;
     setUpdating(true);
+    setActionFeedback(null);
     try {
       await issueService.assignDepartment(issue.id, selectedDeptId, notes);
       setNotes('');
-      await fetchIssue();
+      await fetchIssue(true);
+      const targetDept = departments.find(d => d.id === selectedDeptId)?.name || 'selected department';
+      setActionFeedback({ type: 'success', message: `Successfully reassigned to ${targetDept}.` });
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to reassign department.');
+      setActionFeedback({ type: 'error', message: err.response?.data?.detail || 'Failed to reassign department.' });
     } finally {
       setUpdating(false);
     }
@@ -282,6 +288,17 @@ export const IssueDetailsPage: React.FC = () => {
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Shield className="w-4 h-4 text-emerald-400" /> Control Panel
               </h3>
+
+              {actionFeedback && (
+                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
+                  actionFeedback.type === 'success' 
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                }`}>
+                  {actionFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertOctagon className="w-4 h-4 shrink-0" />}
+                  <span>{actionFeedback.message}</span>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div>

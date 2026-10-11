@@ -70,6 +70,8 @@ export interface AIAnalysisResult {
   defect_area_ratio: number;
   annotated_image_url?: string;
   original_image_url: string;
+  message?: string;
+  error?: string;
 }
 
 export interface IssueImage {
