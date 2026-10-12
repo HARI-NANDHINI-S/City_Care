@@ -11,10 +11,11 @@ class DefectDomain(str, Enum):
     PEDESTRIAN_INFRASTRUCTURE = "PEDESTRIAN_INFRASTRUCTURE"
 
 class ModelReadinessStatus(str, Enum):
-    READY_VERIFIED = "READY_VERIFIED"
-    PENDING_DATA_TRAINING = "PENDING_DATA_TRAINING"
-    UNSUPPORTED = "UNSUPPORTED"
-    FUTURE_SCOPE = "FUTURE_SCOPE"
+    DETECTION_SUPPORTED = "DETECTION_SUPPORTED"             # Has verified bounding-box detection weights
+    CLASSIFICATION_ONLY_DATA = "CLASSIFICATION_ONLY_DATA"   # Has clean Indian image-level data; no bounding boxes
+    PENDING_DATA_ACCESS = "PENDING_DATA_ACCESS"             # External Indian dataset identified but download restricted
+    INSUFFICIENT_INDIAN_DATA = "INSUFFICIENT_INDIAN_DATA"   # No viable Indian dataset found yet
+    FUTURE_SCOPE = "FUTURE_SCOPE"                           # Out-of-scope future module
 
 # Comprehensive specification of all 12 target defect categories + extensions
 DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
@@ -23,10 +24,10 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     # -------------------------------------------------------------
     "Pothole": {
         "domain": DefectDomain.ROAD,
-        "raw_classes": ["D40", "pothole"],
+        "raw_classes": ["D40"],
         "model_id": "yolov8-rdd2020-india-v1",
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.READY_VERIFIED,
+        "readiness": ModelReadinessStatus.DETECTION_SUPPORTED,
         "default_dept_code": "DEPT_PWD",
         "default_dept_name": "Road & Public Works Department",
         "base_risk_score": 75.0,
@@ -35,10 +36,10 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "Longitudinal Crack": {
         "domain": DefectDomain.ROAD,
-        "raw_classes": ["D00", "longitudinal_crack"],
+        "raw_classes": ["D00"],
         "model_id": "yolov8-rdd2020-india-v1",
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.READY_VERIFIED,
+        "readiness": ModelReadinessStatus.DETECTION_SUPPORTED,
         "default_dept_code": "DEPT_PWD",
         "default_dept_name": "Road & Public Works Department",
         "base_risk_score": 60.0,
@@ -47,10 +48,10 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "Transverse Crack": {
         "domain": DefectDomain.ROAD,
-        "raw_classes": ["D10", "transverse_crack"],
+        "raw_classes": ["D10"],
         "model_id": "yolov8-rdd2020-india-v1",
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.READY_VERIFIED,
+        "readiness": ModelReadinessStatus.DETECTION_SUPPORTED,
         "default_dept_code": "DEPT_PWD",
         "default_dept_name": "Road & Public Works Department",
         "base_risk_score": 60.0,
@@ -59,10 +60,10 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "Alligator Crack": {
         "domain": DefectDomain.ROAD,
-        "raw_classes": ["D20", "alligator_crack"],
+        "raw_classes": ["D20"],
         "model_id": "yolov8-rdd2020-india-v1",
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.READY_VERIFIED,
+        "readiness": ModelReadinessStatus.DETECTION_SUPPORTED,
         "default_dept_code": "DEPT_PWD",
         "default_dept_name": "Road & Public Works Department",
         "base_risk_score": 70.0,
@@ -71,15 +72,15 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "Damaged Road Surface": {
         "domain": DefectDomain.ROAD,
-        "raw_classes": ["broken_edges", "damaged_surface"],
-        "model_id": "yolov8-rdd2020-india-v1",
-        "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "raw_classes": ["broken_edges"],
+        "model_id": "irdid-classifier-candidate",
+        "model_type": "image_classification",
+        "readiness": ModelReadinessStatus.CLASSIFICATION_ONLY_DATA,
         "default_dept_code": "DEPT_PWD",
         "default_dept_name": "Road & Public Works Department",
         "base_risk_score": 65.0,
         "confidence_threshold": 0.30,
-        "description": "Severe raveling, broken road shoulder, or weathered pavement."
+        "description": "Severe raveling, broken road shoulder, or weathered pavement (IRDID broken_edges: 67 unique images)."
     },
     # Umbrella backward compatibility
     "Road Damage": {
@@ -87,7 +88,7 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "raw_classes": ["D00", "D10", "D20"],
         "model_id": "yolov8-rdd2020-india-v1",
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.READY_VERIFIED,
+        "readiness": ModelReadinessStatus.DETECTION_SUPPORTED,
         "default_dept_code": "DEPT_PWD",
         "default_dept_name": "Road & Public Works Department",
         "base_risk_score": 65.0,
@@ -100,34 +101,34 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     # -------------------------------------------------------------
     "Garbage Accumulation": {
         "domain": DefectDomain.SANITATION,
-        "raw_classes": ["garbage", "trash_pile"],
-        "model_id": "sanitation-detector-v1",
+        "raw_classes": ["garbage"],
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.PENDING_DATA_ACCESS,
         "default_dept_code": "DEPT_SAN",
         "default_dept_name": "Waste Management & Sanitation Dept",
         "base_risk_score": 50.0,
         "confidence_threshold": 0.30,
-        "description": "Accumulated household, street, or commercial solid waste."
+        "description": "Accumulated solid waste. (DataCluster Labs dataset pending licensing request)."
     },
     "Illegal Dumping": {
         "domain": DefectDomain.SANITATION,
-        "raw_classes": ["illegal_dump", "debris_dumping"],
-        "model_id": "sanitation-detector-v1",
+        "raw_classes": ["illegal_dump"],
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.PENDING_DATA_ACCESS,
         "default_dept_code": "DEPT_SAN",
         "default_dept_name": "Waste Management & Sanitation Dept",
         "base_risk_score": 55.0,
         "confidence_threshold": 0.30,
-        "description": "Unauthorized large-scale disposal of rubble or industrial waste."
+        "description": "Unauthorized large-scale disposal of rubble or commercial waste."
     },
     "Overflowing Garbage Bins": {
         "domain": DefectDomain.SANITATION,
-        "raw_classes": ["overflowing_bin", "trash_bin_overflow"],
-        "model_id": "sanitation-detector-v1",
+        "raw_classes": ["overflowing_bin"],
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.PENDING_DATA_ACCESS,
         "default_dept_code": "DEPT_SAN",
         "default_dept_name": "Waste Management & Sanitation Dept",
         "base_risk_score": 52.0,
@@ -140,79 +141,79 @@ DEFECT_REGISTRY: Dict[str, Dict[str, Any]] = {
     # -------------------------------------------------------------
     "Blocked Drains": {
         "domain": DefectDomain.DRAINAGE,
-        "raw_classes": ["blocked_drain", "silted_canal"],
-        "model_id": "drainage-detector-v1",
+        "raw_classes": ["blocked_drain"],
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.INSUFFICIENT_INDIAN_DATA,
         "default_dept_code": "DEPT_DRAIN",
         "default_dept_name": "Stormwater Drainage Dept",
         "base_risk_score": 75.0,
         "confidence_threshold": 0.30,
-        "description": "Stormwater canal or culvert clogged by sediment or trash."
+        "description": "Stormwater canal or culvert clogged by silt or debris. Requires field collection."
     },
     "Overflowing Drains": {
         "domain": DefectDomain.DRAINAGE,
-        "raw_classes": ["overflowing_drain", "drain_spill"],
-        "model_id": "drainage-detector-v1",
+        "raw_classes": ["overflowing_drain"],
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.INSUFFICIENT_INDIAN_DATA,
         "default_dept_code": "DEPT_DRAIN",
         "default_dept_name": "Stormwater Drainage Dept",
         "base_risk_score": 80.0,
         "confidence_threshold": 0.30,
-        "description": "Drain water spilling over banks onto roadways or walkways."
+        "description": "Drain water spilling over canal banks onto roadways. Requires field collection."
     },
     "Waterlogging": {
         "domain": DefectDomain.DRAINAGE,
-        "raw_classes": ["waterlogged_road", "flood_pooling"],
-        "model_id": "drainage-detector-v1",
-        "model_type": "semantic_segmentation",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "raw_classes": ["waterlogged_roads"],
+        "model_id": "irdid-classifier-candidate",
+        "model_type": "image_classification",
+        "readiness": ModelReadinessStatus.CLASSIFICATION_ONLY_DATA,
         "default_dept_code": "DEPT_DRAIN",
         "default_dept_name": "Stormwater Drainage Dept",
         "base_risk_score": 80.0,
         "confidence_threshold": 0.30,
-        "description": "Accumulation of standing flood water causing traffic impediment."
+        "description": "Road section submerged in standing flood water (IRDID waterlogged_roads: 95 unique images)."
     },
     "Damaged Drainage Covers": {
         "domain": DefectDomain.DRAINAGE,
-        "raw_classes": ["damaged_grate", "broken_culvert_slab", "open_manhole"],
-        "model_id": "drainage-detector-v1",
+        "raw_classes": ["damaged_drain_grate"],
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.INSUFFICIENT_INDIAN_DATA,
         "default_dept_code": "DEPT_DRAIN",
         "default_dept_name": "Stormwater Drainage Dept",
         "base_risk_score": 90.0,
         "confidence_threshold": 0.30,
-        "description": "Broken, cracked, or dislodged storm drain slabs or grates."
+        "description": "Broken, collapsed, or displaced stormwater drain slabs/culvert grates. Distinct from sewer manholes."
     },
 
     # -------------------------------------------------------------
-    # D. UTILITY & LEGACY CIVIC CATEGORIES
+    # D. UTILITY CIVIC DEFECTS (Distinct from drainage covers)
     # -------------------------------------------------------------
     "Open Manhole": {
         "domain": DefectDomain.UTILITY,
-        "raw_classes": ["open_manhole"],
-        "model_id": "utility-safety-v1",
-        "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "raw_classes": ["open_manholes"],
+        "model_id": "irdid-classifier-candidate",
+        "model_type": "image_classification",
+        "readiness": ModelReadinessStatus.CLASSIFICATION_ONLY_DATA,
         "default_dept_code": "DEPT_SEW",
         "default_dept_name": "Sewerage & Sanitation Board",
         "base_risk_score": 95.0,
         "confidence_threshold": 0.30,
-        "description": "Exposed underground sewer shaft opening."
+        "description": "Exposed underground sewer shaft opening (IRDID open_manholes: 59 unique images)."
     },
     "Broken Streetlight": {
         "domain": DefectDomain.UTILITY,
         "raw_classes": ["broken_streetlight"],
-        "model_id": "utility-safety-v1",
+        "model_id": None,
         "model_type": "object_detection",
-        "readiness": ModelReadinessStatus.PENDING_DATA_TRAINING,
+        "readiness": ModelReadinessStatus.INSUFFICIENT_INDIAN_DATA,
         "default_dept_code": "DEPT_ELEC",
         "default_dept_name": "Electrical Infrastructure Dept",
         "base_risk_score": 50.0,
         "confidence_threshold": 0.30,
-        "description": "Non-functioning, hanging, or damaged street luminaire."
+        "description": "Non-functioning, damaged, or unshielded street luminaire."
     }
 }
 
