@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { issueService } from '../services/api';
-import { AIAnalysisResult } from '../types';
+import { AIAnalysisResult, ACTIVE_12_CATEGORIES, ModelReadinessStatus } from '../types';
 import { Upload, MapPin, Cpu, AlertCircle, ArrowRight, CheckCircle2, Image as ImageIcon, Crosshair, Map } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -291,30 +291,56 @@ export const ReportIssuePage: React.FC = () => {
                       onChange={(e) => setManualCategory(e.target.value)}
                       className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
                     >
-                      <optgroup label="Road Infrastructure Defects">
-                        <option value="Pothole">Potholes</option>
-                        <option value="Longitudinal Crack">Longitudinal Cracks</option>
-                        <option value="Transverse Crack">Transverse Cracks</option>
-                        <option value="Alligator Crack">Alligator Cracks</option>
-                        <option value="Damaged Road Surface">Damaged Road Surfaces</option>
-                        <option value="Road Damage">Road Damage (General)</option>
+                      <optgroup label="Road Infrastructure Defects (5)">
+                        <option value="Pothole">Potholes [Detection Supported]</option>
+                        <option value="Longitudinal Crack">Longitudinal Cracks [Detection Supported]</option>
+                        <option value="Transverse Crack">Transverse Cracks [Detection Supported]</option>
+                        <option value="Alligator Crack">Alligator Cracks [Detection Supported]</option>
+                        <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Only]</option>
                       </optgroup>
-                      <optgroup label="Sanitation & Waste Defects">
-                        <option value="Garbage Accumulation">Garbage Accumulation</option>
-                        <option value="Illegal Dumping">Illegal Dumping</option>
-                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins</option>
+                      <optgroup label="Sanitation & Waste Defects (3)">
+                        <option value="Garbage Accumulation">Garbage Accumulation [Pending Manual Training]</option>
+                        <option value="Illegal Dumping">Illegal Dumping [Pending Manual Training]</option>
+                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Pending Manual Training]</option>
                       </optgroup>
-                      <optgroup label="Drainage & Flood Defects">
-                        <option value="Blocked Drains">Blocked Drains</option>
-                        <option value="Overflowing Drains">Overflowing Drains</option>
-                        <option value="Waterlogging">Waterlogging</option>
-                        <option value="Damaged Drainage Covers">Damaged Drainage Covers</option>
-                      </optgroup>
-                      <optgroup label="Utility Safety Defects">
-                        <option value="Open Manhole">Open Manholes</option>
-                        <option value="Broken Streetlight">Broken Streetlights</option>
+                      <optgroup label="Drainage & Flood Defects (4)">
+                        <option value="Blocked Drains">Blocked Drains [Insufficient Suitable Data]</option>
+                        <option value="Overflowing Drains">Overflowing Drains [Insufficient Suitable Data]</option>
+                        <option value="Waterlogging">Waterlogging [Classification Only]</option>
+                        <option value="Damaged Drainage Covers">Damaged Drainage Covers [Insufficient Suitable Data]</option>
                       </optgroup>
                     </select>
+
+                    {/* Dynamic Capability Notice */}
+                    {(() => {
+                      const meta = ACTIVE_12_CATEGORIES.find(c => c.name === manualCategory);
+                      if (!meta) return null;
+                      const isDetection = meta.capability === ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED;
+                      const isClassification = meta.capability === ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY;
+                      const isPending = meta.capability === ModelReadinessStatus.PENDING_MANUAL_TRAINING;
+                      
+                      return (
+                        <div className="mt-2 p-2.5 rounded-lg bg-slate-900/80 border border-civic-border text-[11px] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono uppercase text-slate-400">Model Capability:</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
+                              isDetection ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                              isClassification ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
+                              isPending ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                              'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}>
+                              {meta.capabilityLabel}
+                            </span>
+                          </div>
+                          <p className="text-slate-400 text-[10px] leading-relaxed">
+                            {meta.description}
+                          </p>
+                          <p className="text-[9px] text-slate-500 italic">
+                            * Category availability in selector does not imply automated model detection capability.
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div>
                     <label className="text-[10px] font-mono text-slate-400 uppercase mb-1 block">Observed Severity</label>
@@ -366,7 +392,9 @@ export const ReportIssuePage: React.FC = () => {
                     <div className="mb-4 relative rounded-lg overflow-hidden border border-civic-border">
                       <img src={aiResult.annotated_image_url} alt="AI Annotated" className="w-full h-40 object-cover" />
                       <div className="absolute bottom-2 left-2 bg-civic-bg/90 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] font-mono text-emerald-400 border border-emerald-500/20">
-                        BBox Overlay Rendered
+                        {aiResult.bounding_boxes && aiResult.bounding_boxes.length > 0
+                          ? 'BBox Detection Overlay'
+                          : 'Whole-Image Scene Classification (No Bounding Box)'}
                       </div>
                     </div>
                   )}

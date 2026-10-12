@@ -105,35 +105,44 @@ def analyze_issue_image(image_path: str) -> Dict[str, Any]:
     detected_defects: List[Dict[str, Any]] = []
 
     for det in valid_detections:
-        coords = det["bounding_box"]
-        x1, y1, x2, y2 = coords
-        w = max(0, x2 - x1)
-        h = max(0, y2 - y1)
-        box_area += (w * h)
+        coords = det.get("bounding_box")
+        if coords and len(coords) == 4:
+            x1, y1, x2, y2 = coords
+            w = max(0, x2 - x1)
+            h = max(0, y2 - y1)
+            box_area += (w * h)
 
-        bbox_data = {
-            "class": det["class"],
-            "raw_class": det.get("raw_class", det["class"]),
-            "confidence": round(det["confidence"], 4),
-            "x": int(x1),
-            "y": int(y1),
-            "width": int(w),
-            "height": int(h),
-            "box_normalized": [
-                round(x1 / width, 3) if width > 0 else 0,
-                round(y1 / height, 3) if height > 0 else 0,
-                round(w / width, 3) if width > 0 else 0,
-                round(h / height, 3) if height > 0 else 0
-            ],
-            "model_id": det.get("source_model")
-        }
-        bounding_boxes.append(bbox_data)
-        detected_defects.append({
-            "category": det["class"],
-            "confidence": round(det["confidence"], 4),
-            "model_id": det.get("source_model"),
-            "bounding_box": [int(x1), int(y1), int(w), int(h)]
-        })
+            bbox_data = {
+                "class": det["class"],
+                "raw_class": det.get("raw_class", det["class"]),
+                "confidence": round(det["confidence"], 4),
+                "x": int(x1),
+                "y": int(y1),
+                "width": int(w),
+                "height": int(h),
+                "box_normalized": [
+                    round(x1 / width, 3) if width > 0 else 0,
+                    round(y1 / height, 3) if height > 0 else 0,
+                    round(w / width, 3) if width > 0 else 0,
+                    round(h / height, 3) if height > 0 else 0
+                ],
+                "model_id": det.get("source_model")
+            }
+            bounding_boxes.append(bbox_data)
+            detected_defects.append({
+                "category": det["class"],
+                "confidence": round(det["confidence"], 4),
+                "model_id": det.get("source_model"),
+                "bounding_box": [int(x1), int(y1), int(w), int(h)]
+            })
+        else:
+            # Whole-image classification detection without bounding box
+            detected_defects.append({
+                "category": det["class"],
+                "confidence": round(det["confidence"], 4),
+                "model_id": det.get("source_model"),
+                "bounding_box": None
+            })
 
     defect_area_ratio = round(box_area / total_area, 3) if total_area > 0 else 0.0
     defect_area_ratio = min(1.0, defect_area_ratio)
@@ -196,7 +205,7 @@ def analyze_issue_image(image_path: str) -> Dict[str, Any]:
         "defect_area_ratio": defect_area_ratio,
         "annotated_image_filename": annotated_filename,
         "original_image_filename": filename,
-        "is_real_yolo": True,
+        "is_real_yolo": (best_detection.get("source_model") == "yolov8-rdd2020-india-v1"),
         "count": len(bounding_boxes),
         "model_provenance": model_provenance
     }

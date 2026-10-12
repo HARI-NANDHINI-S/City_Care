@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Cpu, MapPin, ShieldCheck, ArrowRight, Zap, Layers, Eye, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { ACTIVE_12_CATEGORIES } from '../types';
 
 const fadeUp = { hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0 } };
 
@@ -66,23 +67,24 @@ export const LandingPage: React.FC = () => {
             ))}
           </motion.div>
 
-          {/* Detection Classes */}
+          {/* Active 12 Defect Categories */}
           <motion.div
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             transition={{ delay: 0.2 }}
             className="mt-16 bg-civic-card/40 backdrop-blur-sm p-8 rounded-2xl border border-civic-border"
           >
             <h3 className="text-center text-sm font-mono text-slate-400 mb-6 uppercase tracking-wider">
-              Detection Target Classes
+              Active Civic Defect Categories (12)
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              {['Pothole', 'Garbage Accumulation', 'Waterlogging', 'Broken Streetlight', 'Open Manhole', 'Road Damage'].map((cls, idx) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {ACTIVE_12_CATEGORIES.map((cat, idx) => (
                 <motion.div
                   key={idx}
                   whileHover={{ scale: 1.03 }}
-                  className="bg-civic-bg px-3 py-3 rounded-xl border border-civic-border text-center text-xs font-medium text-cyan-300/80 hover:border-cyan-500/30 transition-all"
+                  className="bg-civic-bg px-3 py-3 rounded-xl border border-civic-border text-center text-xs font-medium text-cyan-300/80 hover:border-cyan-500/30 transition-all flex flex-col justify-center"
                 >
-                  {cls}
+                  <span className="text-[10px] text-slate-500 uppercase font-mono">{cat.domain}</span>
+                  <span className="mt-0.5">{cat.name}</span>
                 </motion.div>
               ))}
             </div>
@@ -95,7 +97,7 @@ export const LandingPage: React.FC = () => {
             className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4"
           >
             {[
-              { label: 'Detection Classes', value: '6', suffix: 'types' },
+              { label: 'Active Defect Categories', value: '12', suffix: 'types' },
               { label: 'Confidence Threshold', value: '85', suffix: '%+' },
               { label: 'Duplicate Radius', value: '50', suffix: 'm' },
               { label: 'Priority Factors', value: '5', suffix: 'weights' },

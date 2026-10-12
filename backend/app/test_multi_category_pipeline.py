@@ -200,5 +200,240 @@ class TestCivicVisionPipeline(unittest.TestCase):
         res = self.client.patch("/api/v1/issues/1/verify-category", json=verify_payload, headers=self.citizen_headers)
         self.assertEqual(res.status_code, 403)
 
+    def test_08_categories_endpoint_12_active_and_capabilities(self):
+        """Verify GET /api/v1/issues/categories returns exactly 12 active categories with capabilities."""
+        res = self.client.get("/api/v1/issues/categories")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["total_active"], 12)
+        active_names = [c["name"] for c in data["active_categories"]]
+        self.assertEqual(len(active_names), 12)
+        
+        # Verify active 12
+        expected_12 = [
+            "Pothole", "Longitudinal Crack", "Transverse Crack", "Alligator Crack", "Damaged Road Surface",
+            "Garbage Accumulation", "Illegal Dumping", "Overflowing Garbage Bins",
+            "Blocked Drains", "Overflowing Drains", "Waterlogging", "Damaged Drainage Covers"
+        ]
+        self.assertEqual(sorted(active_names), sorted(expected_12))
+
+        # Quarantine check: Open Manholes and Broken Streetlights must NOT be in active categories
+        self.assertNotIn("Open Manhole", active_names)
+        self.assertNotIn("Broken Streetlight", active_names)
+        self.assertNotIn("Road Damage", active_names)
+
+        # Capability check: each category has readiness and model_type
+        for cat in data["active_categories"]:
+            self.assertIn("readiness", cat)
+            self.assertIn("readiness_label", cat)
+            self.assertIn("model_type", cat)
+
+    def test_09_capability_and_scope_distinctions(self):
+        """Verify distinct semantics for manholes vs drainage covers and waterlogging classification."""
+        from app.core.defect_registry import get_category_spec, ModelReadinessStatus
+        
+        # 1. Drainage cover vs Open Manhole distinction
+        drainage_spec = get_category_spec("Damaged Drainage Covers")
+        manhole_spec = get_category_spec("Open Manhole")
+        self.assertNotEqual(drainage_spec["domain"], manhole_spec["domain"])
+        self.assertEqual(drainage_spec["default_dept_code"], "DEPT_DRAIN")
+        self.assertEqual(manhole_spec["default_dept_code"], "DEPT_SEW")
+        self.assertTrue(drainage_spec["is_active_scope"])
+        self.assertFalse(manhole_spec["is_active_scope"])
+
+        # 2. Waterlogging whole-image classification vs localized detection
+        water_spec = get_category_spec("Waterlogging")
+        self.assertEqual(water_spec["model_type"], "image_classification")
+        self.assertEqual(water_spec["readiness"], ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY)
+
+        # 3. Transverse Crack has 9 test instances in RDD2020 India
+        tc_spec = get_category_spec("Transverse Crack")
+        self.assertIn("9 test instances", tc_spec["description"])
+
+    def test_10_multi_domain_manual_reporting_and_routing(self):
+        """Verify manual reporting across all 12 active categories routes to correct departments."""
+        test_cases = [
+            # Roads (5)
+            ("Pothole", "DEPT_PWD"),
+            ("Longitudinal Crack", "DEPT_PWD"),
+            ("Transverse Crack", "DEPT_PWD"),
+            ("Alligator Crack", "DEPT_PWD"),
+            ("Damaged Road Surface", "DEPT_PWD"),
+            # Sanitation (3)
+            ("Garbage Accumulation", "DEPT_SAN"),
+            ("Illegal Dumping", "DEPT_SAN"),
+            ("Overflowing Garbage Bins", "DEPT_SAN"),
+            # Drainage (4)
+            ("Blocked Drains", "DEPT_DRAIN"),
+            ("Overflowing Drains", "DEPT_DRAIN"),
+            ("Waterlogging", "DEPT_DRAIN"),
+            ("Damaged Drainage Covers", "DEPT_DRAIN"),
+        ]
+        self.assertEqual(len(test_cases), 12, "Must test exactly 12 active categories!")
+
+        for category, expected_dept_code in test_cases:
+            payload = {
+                "title": f"Manual citizen report: {category}",
+                "description": f"Citizen observed {category} requiring municipal attention.",
+                "issue_type": category,
+                "latitude": 13.0827,
+                "longitude": 80.2707,
+                "address": "Civic Area Sector 1",
+                "original_image_url": "/uploads/original/manual_sample.jpg",
+                "ai_confidence": 0.0,
+                "severity": "MEDIUM",
+                "priority_score": 50.0,
+                "bounding_box_json": "[]",
+                "ai_analysis_status": "MANUAL_OR_UNAVAILABLE"
+            }
+            res = self.client.post("/api/v1/issues", json=payload, headers=self.citizen_headers)
+            self.assertEqual(res.status_code, 200, f"Failed creating report for {category}: {res.text}")
+            data = res.json()
+            self.assertEqual(data["status"], "REPORTED")
+            self.assertEqual(data["issue_type"], category)
+            self.assertIsNotNone(data["department"], f"No department routed for {category}")
+            self.assertEqual(data["department"]["code"], expected_dept_code)
+
+    def test_11_my_reports_and_details_retrieval(self):
+        """Verify citizen can retrieve submitted reports via /my-reports and /issues/{id}."""
+        # 1. Retrieve all citizen reports
+        res_list = self.client.get("/api/v1/issues/my-reports", headers=self.citizen_headers)
+        self.assertEqual(res_list.status_code, 200)
+        reports = res_list.json()
+        self.assertGreaterEqual(len(reports), 12)
+
+        # 2. Filter by category
+        res_filtered = self.client.get("/api/v1/issues/my-reports?category=Waterlogging", headers=self.citizen_headers)
+        self.assertEqual(res_filtered.status_code, 200)
+        water_reports = res_filtered.json()
+        self.assertTrue(all(r["issue_type"] == "Waterlogging" for r in water_reports))
+
+        # 3. Retrieve single issue details
+        sample_id = reports[0]["id"]
+        res_detail = self.client.get(f"/api/v1/issues/{sample_id}", headers=self.citizen_headers)
+        self.assertEqual(res_detail.status_code, 200)
+        detail = res_detail.json()
+        self.assertEqual(detail["id"], sample_id)
+        self.assertIn("department", detail)
+        self.assertIn("status_history", detail)
+
+    def test_12_municipal_status_updates_and_category_correction(self):
+        """Exercise municipal issue status transition and category correction with validation."""
+        # Create an issue
+        payload = {
+            "title": "Drainage Issue near Central Bus Stand",
+            "description": "Reported drain condition",
+            "issue_type": "Blocked Drains",
+            "latitude": 13.0830,
+            "longitude": 80.2710,
+            "address": "Central Bus Stand",
+            "original_image_url": "/uploads/original/drain_sample.jpg",
+            "ai_confidence": 0.0,
+            "severity": "HIGH",
+            "priority_score": 75.0,
+            "bounding_box_json": "[]",
+            "ai_analysis_status": "MANUAL_OR_UNAVAILABLE"
+        }
+        res_create = self.client.post("/api/v1/issues", json=payload, headers=self.citizen_headers)
+        issue_id = res_create.json()["id"]
+
+        # Advance status: UNDER_REVIEW -> ASSIGNED -> IN_PROGRESS
+        status_steps = ["UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS"]
+        for st in status_steps:
+            res_st = self.client.patch(
+                f"/api/v1/issues/{issue_id}/status",
+                json={"status": st, "notes": f"Progressed to {st}"},
+                headers=self.admin_headers
+            )
+            self.assertEqual(res_st.status_code, 200)
+            self.assertEqual(res_st.json()["status"], st)
+
+        # Category correction to another valid active category
+        res_corr = self.client.patch(
+            f"/api/v1/issues/{issue_id}/verify-category",
+            json={"verified_category": "Overflowing Drains", "notes": "Inspector found drain overflowing onto pavement."},
+            headers=self.admin_headers
+        )
+        self.assertEqual(res_corr.status_code, 200)
+        self.assertEqual(res_corr.json()["verified_category"], "Overflowing Drains")
+
+        # Invalid category rejection
+        res_invalid = self.client.patch(
+            f"/api/v1/issues/{issue_id}/verify-category",
+            json={"verified_category": "Alien Spacecraft Crash", "notes": "Invalid"},
+            headers=self.admin_headers
+        )
+        self.assertEqual(res_invalid.status_code, 400)
+
+    def test_13_public_map_and_analytics_integrity(self):
+        """Verify public map and analytics dashboard correctly aggregate persisted records."""
+        res_map = self.client.get("/api/v1/issues/map-data")
+        self.assertEqual(res_map.status_code, 200)
+        points = res_map.json()
+        self.assertIsInstance(points, list)
+        self.assertGreater(len(points), 0)
+        for pt in points:
+            self.assertIn("latitude", pt)
+            self.assertIn("longitude", pt)
+            self.assertIn("issue_type", pt)
+            self.assertIn("status", pt)
+
+        res_analytics = self.client.get("/api/v1/analytics/dashboard")
+        self.assertEqual(res_analytics.status_code, 200)
+        analytics = res_analytics.json()
+        self.assertGreater(analytics["total_issues"], 0)
+        self.assertIn("issues_by_category", analytics)
+        self.assertIn("issues_by_severity", analytics)
+        self.assertIn("department_performance", analytics)
+
+    def test_14_whole_image_classification_truthfulness_no_synthetic_boxes(self):
+        """Verify IMAGE_CLASSIFICATION_ONLY reports without synthetic bounding boxes."""
+        payload = {
+            "title": "Severe Waterlogging along Subway Underpass",
+            "description": "Entire road underpass submerged under water.",
+            "issue_type": "Waterlogging",
+            "latitude": 13.0840,
+            "longitude": 80.2720,
+            "address": "Subway Underpass",
+            "original_image_url": "/uploads/original/waterlog_scene.jpg",
+            "ai_confidence": 0.85,
+            "severity": "HIGH",
+            "priority_score": 80.0,
+            "bounding_box_json": "[]", # Genuine empty bounding boxes for whole-image classification
+            "ai_analysis_status": "SUCCESS"
+        }
+        res = self.client.post("/api/v1/issues", json=payload, headers=self.citizen_headers)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "AI_ANALYZED")
+        self.assertEqual(data["issue_type"], "Waterlogging")
+        self.assertEqual(data["department"]["code"], "DEPT_DRAIN")
+        # Ensure images table contains no synthetic bounding box
+        self.assertEqual(data["images"][0]["bounding_box_json"], "[]")
+
+    def test_15_failure_handling_and_no_orphaned_records(self):
+        """Verify image upload errors fail cleanly without creating orphaned issue records."""
+        # Record issue count before
+        session = self.SessionLocal()
+        count_before = session.query(Issue).count()
+        session.close()
+
+        # 1. Post invalid file extension
+        bad_file = io.BytesIO(b"executable data")
+        bad_file.name = "payload.exe"
+        res_bad = self.client.post(
+            "/api/v1/issues/analyze-image",
+            files={"file": ("payload.exe", bad_file, "application/octet-stream")},
+            headers=self.citizen_headers
+        )
+        self.assertEqual(res_bad.status_code, 400)
+        self.assertIn("Invalid image format", res_bad.text)
+
+        # 2. Record issue count after
+        session = self.SessionLocal()
+        count_after = session.query(Issue).count()
+        session.close()
+        self.assertEqual(count_before, count_after, "No orphaned issues should be created on upload failure!")
+
 if __name__ == "__main__":
     unittest.main()

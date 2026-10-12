@@ -33,6 +33,25 @@ def history(db,issue,user,new_status,note=None,progress=None):
     old=issue.status; issue.status=new_status
     db.add(IssueStatusHistory(issue_id=issue.id,previous_status=old,new_status=new_status,changed_by_user_id=user.id,notes=note,progress_percentage=progress))
 
+@router.get('/categories')
+def list_categories():
+    from app.core.defect_registry import get_active_categories, FUTURE_EXTENSION_REGISTRY, READINESS_LABELS
+    return {
+        "active_categories": get_active_categories(),
+        "total_active": len(get_active_categories()),
+        "readiness_labels": READINESS_LABELS,
+        "future_extensions": [
+            {
+                "domain": k.value if hasattr(k, "value") else str(k),
+                "title": v.get("title"),
+                "scope": v.get("scope"),
+                "intended_categories": v.get("intended_categories"),
+                "status": "FUTURE_SCOPE"
+            }
+            for k, v in FUTURE_EXTENSION_REGISTRY.items()
+        ]
+    }
+
 @router.post('/analyze-image')
 def analyze_image(file:UploadFile=File(...), current_user:User=Depends(get_current_user)):
     ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
@@ -66,7 +85,10 @@ def create_issue(payload:CreateIssueSchema,db:Session=Depends(get_db),current_us
     dept = db.query(Department).filter(Department.code == target_code).first()
 
     # Determine analysis status & initial workflow status
-    is_ai_detected = (payload.ai_confidence or 0) > 0 and bool(payload.bounding_box_json and payload.bounding_box_json != "[]")
+    is_ai_detected = (payload.ai_confidence or 0) > 0 and (
+        bool(payload.bounding_box_json and payload.bounding_box_json != "[]")
+        or payload.ai_analysis_status == "SUCCESS"
+    )
     initial_status = IssueStatus.AI_ANALYZED if is_ai_detected else IssueStatus.REPORTED
     initial_note = 'AI analysis completed and report submitted.' if is_ai_detected else 'Report submitted with citizen-selected category.'
 
@@ -241,6 +263,10 @@ def verify_category(issue_id: int, payload: VerifyCategorySchema, db: Session = 
     issue = q_issue(db, issue_id)
     assert_department_access(issue, current_user)
     
+    from app.core.defect_registry import DEFECT_REGISTRY
+    if payload.verified_category not in DEFECT_REGISTRY:
+        raise HTTPException(400, f"Invalid category '{payload.verified_category}'. Must be a recognized defect category.")
+
     old_cat = issue.verified_category or issue.issue_type.value
     issue.verified_category = payload.verified_category
     note = f"Category reviewed and updated: from '{old_cat}' to '{payload.verified_category}'. {payload.notes or ''}".strip()

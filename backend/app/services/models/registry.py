@@ -34,11 +34,12 @@ class ModelRegistry:
         )
         self._adapters[drainage_adapter.model_id] = drainage_adapter
 
-        # 4. Utility Model Adapter
+        # 4. Out-of-scope Utility Model Adapter (Quarantined outside active 12-category scope)
+        # Utility safety (Open Manholes, Broken Streetlights) is preserved for backward compatibility
         utility_adapter = PendingModelAdapter(
             model_id="utility-safety-v1",
             supported_categories=["Open Manhole", "Broken Streetlight"],
-            blocker_reason="Utility safety model is pending dedicated training."
+            blocker_reason="Utility safety is quarantined outside the active 12-category scope."
         )
         self._adapters[utility_adapter.model_id] = utility_adapter
 
