@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
 from app.services.models.base_adapter import BaseDefectModelAdapter
 from app.services.models.yolo_adapter import YOLOv8RoadDamageAdapter
+from app.services.models.classification_adapter import IRDIDClassificationAdapter
 from app.services.models.pending_adapter import PendingModelAdapter
 
 class ModelRegistry:
@@ -14,7 +15,7 @@ class ModelRegistry:
         self._initialize_adapters()
 
     def _initialize_adapters(self):
-        # 1. Active YOLOv8 Road Damage model
+        # 1. Active YOLOv8 Road Damage model (object detection)
         yolo_adapter = YOLOv8RoadDamageAdapter()
         self._adapters[yolo_adapter.model_id] = yolo_adapter
 
@@ -26,15 +27,19 @@ class ModelRegistry:
         )
         self._adapters[sanitation_adapter.model_id] = sanitation_adapter
 
-        # 3. Drainage Model Adapter (Pending training on Indian drainage / flood dataset)
+        # 3. Drainage Model Adapter (Pending training on Indian drainage / culvert dataset)
         drainage_adapter = PendingModelAdapter(
             model_id="drainage-detector-v1",
-            supported_categories=["Blocked Drains", "Overflowing Drains", "Waterlogging", "Damaged Drainage Covers"],
+            supported_categories=["Blocked Drains", "Overflowing Drains", "Damaged Drainage Covers"],
             blocker_reason="Drainage defect detector is pending manual training on Indian open drainage dataset."
         )
         self._adapters[drainage_adapter.model_id] = drainage_adapter
 
-        # 4. Out-of-scope Utility Model Adapter (Quarantined outside active 12-category scope)
+        # 4. IRDID Classification Adapter Candidate (Designed for whole-image classification of Damaged Road Surfaces & Waterlogging)
+        irdid_adapter = IRDIDClassificationAdapter()
+        self._adapters[irdid_adapter.model_id] = irdid_adapter
+
+        # 5. Out-of-scope Utility Model Adapter (Quarantined outside active 12-category scope)
         # Utility safety (Open Manholes, Broken Streetlights) is preserved for backward compatibility
         utility_adapter = PendingModelAdapter(
             model_id="utility-safety-v1",

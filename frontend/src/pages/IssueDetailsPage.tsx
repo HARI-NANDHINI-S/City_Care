@@ -375,22 +375,22 @@ export const IssueDetailsPage: React.FC = () => {
                     className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-all"
                   >
                     <optgroup label="Road Infrastructure Defects (5)">
-                      <option value="Pothole">Potholes [Detection Supported]</option>
-                      <option value="Longitudinal Crack">Longitudinal Cracks [Detection Supported]</option>
-                      <option value="Transverse Crack">Transverse Cracks [Detection Supported]</option>
-                      <option value="Alligator Crack">Alligator Cracks [Detection Supported]</option>
-                      <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Only]</option>
+                      <option value="Pothole">Potholes [Object Detection Supported]</option>
+                      <option value="Longitudinal Crack">Longitudinal Cracks [Object Detection Supported]</option>
+                      <option value="Transverse Crack">Transverse Cracks [Object Detection Supported]</option>
+                      <option value="Alligator Crack">Alligator Cracks [Object Detection Supported]</option>
+                      <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Intended — Model Unavailable]</option>
                     </optgroup>
                     <optgroup label="Sanitation & Waste Defects (3)">
-                      <option value="Garbage Accumulation">Garbage Accumulation [Pending Manual Training]</option>
-                      <option value="Illegal Dumping">Illegal Dumping [Pending Manual Training]</option>
-                      <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Pending Manual Training]</option>
+                      <option value="Garbage Accumulation">Garbage Accumulation [Manual Reporting Only — Pending Training]</option>
+                      <option value="Illegal Dumping">Illegal Dumping [Manual Reporting Only — Pending Training]</option>
+                      <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Manual Reporting Only — Pending Training]</option>
                     </optgroup>
                     <optgroup label="Drainage & Flood Defects (4)">
-                      <option value="Blocked Drains">Blocked Drains [Insufficient Suitable Data]</option>
-                      <option value="Overflowing Drains">Overflowing Drains [Insufficient Suitable Data]</option>
-                      <option value="Waterlogging">Waterlogging [Classification Only]</option>
-                      <option value="Damaged Drainage Covers">Damaged Drainage Covers [Insufficient Suitable Data]</option>
+                      <option value="Blocked Drains">Blocked Drains [Manual Reporting Only — Insufficient Field Data]</option>
+                      <option value="Overflowing Drains">Overflowing Drains [Manual Reporting Only — Insufficient Field Data]</option>
+                      <option value="Waterlogging">Waterlogging [Classification Intended — Model Unavailable]</option>
+                      <option value="Damaged Drainage Covers">Damaged Drainage Covers [Manual Reporting Only — Insufficient Field Data]</option>
                     </optgroup>
                     {['Open Manhole', 'Broken Streetlight', 'Road Damage'].includes(verifiedCategory) && (
                       <optgroup label="Legacy / Preserved Record (Out of Active Scope)">

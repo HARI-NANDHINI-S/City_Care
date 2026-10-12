@@ -11,11 +11,14 @@ class DefectDomain(str, Enum):
     PEDESTRIAN_INFRASTRUCTURE = "PEDESTRIAN_INFRASTRUCTURE"
 
 class ModelReadinessStatus(str, Enum):
-    # The 5 primary capability states required across backend & frontend:
+    # The primary capability & runtime readiness states:
     OBJECT_DETECTION_SUPPORTED = "OBJECT_DETECTION_SUPPORTED" # Object detection supported by a compatible model
-    IMAGE_CLASSIFICATION_ONLY = "IMAGE_CLASSIFICATION_ONLY"   # Image classification only (whole-image / scene, no bounding boxes)
-    PENDING_MANUAL_TRAINING = "PENDING_MANUAL_TRAINING"       # Pending manual training
-    INSUFFICIENT_SUITABLE_DATA = "INSUFFICIENT_SUITABLE_DATA" # Insufficient suitable data (requires Indian field collection)
+    CLASSIFICATION_AVAILABLE = "CLASSIFICATION_AVAILABLE"     # Classification model available (weights loaded)
+    CLASSIFICATION_UNAVAILABLE = "CLASSIFICATION_UNAVAILABLE" # Classification intended but model unavailable (weights not loaded)
+    IMAGE_CLASSIFICATION_ONLY = "IMAGE_CLASSIFICATION_ONLY"   # Intended whole-image / scene classification (no bounding boxes)
+    PENDING_MANUAL_TRAINING = "PENDING_MANUAL_TRAINING"       # Manual reporting only — pending model training
+    INSUFFICIENT_SUITABLE_DATA = "INSUFFICIENT_SUITABLE_DATA" # Manual reporting only — insufficient suitable data
+    MANUAL_REPORTING_ONLY = "MANUAL_REPORTING_ONLY"           # Manual reporting only
     ANALYSIS_FAILED = "ANALYSIS_FAILED"                       # Analysis failed (corrupted or unreadable image)
 
     # Future scope extension state:
@@ -29,9 +32,12 @@ class ModelReadinessStatus(str, Enum):
 
 READINESS_LABELS: Dict[str, str] = {
     ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED.value: "Object detection supported by a compatible model",
-    ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY.value: "Image classification only",
-    ModelReadinessStatus.PENDING_MANUAL_TRAINING.value: "Pending manual training",
-    ModelReadinessStatus.INSUFFICIENT_SUITABLE_DATA.value: "Insufficient suitable data",
+    ModelReadinessStatus.CLASSIFICATION_AVAILABLE.value: "Classification model available",
+    ModelReadinessStatus.CLASSIFICATION_UNAVAILABLE.value: "Classification intended (model unavailable)",
+    ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY.value: "Classification intended (model unavailable)",
+    ModelReadinessStatus.PENDING_MANUAL_TRAINING.value: "Manual reporting only (pending training)",
+    ModelReadinessStatus.INSUFFICIENT_SUITABLE_DATA.value: "Manual reporting only (insufficient suitable data)",
+    ModelReadinessStatus.MANUAL_REPORTING_ONLY.value: "Manual reporting only",
     ModelReadinessStatus.ANALYSIS_FAILED.value: "Analysis failed",
     ModelReadinessStatus.FUTURE_SCOPE.value: "Future extension (unimplemented)"
 }
@@ -289,20 +295,54 @@ def get_category_spec(category_name: str) -> Optional[Dict[str, Any]]:
     return DEFECT_REGISTRY.get(category_name)
 
 def get_active_categories() -> List[Dict[str, Any]]:
-    """Returns the metadata and capability status for the active 12 categories."""
+    """Returns the metadata and runtime capability status for the active 12 categories."""
+    from app.services.models.registry import model_registry
     result = []
     for name in ACTIVE_12_CATEGORIES:
         spec = DEFECT_REGISTRY.get(name, {})
+        model_id = spec.get("model_id")
+        adapter = model_registry.get_adapter(model_id) if model_id else None
+        is_model_available = adapter.is_available if adapter else False
+
         readiness_val = spec.get("readiness")
         readiness_str = readiness_val.value if isinstance(readiness_val, ModelReadinessStatus) else str(readiness_val)
+
+        # Distinguish exact runtime capability
+        if spec.get("model_type") == "object_detection":
+            if is_model_available:
+                capability_category = "OBJECT_DETECTION_SUPPORTED"
+                runtime_readiness = ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED.value
+                runtime_label = "Object detection supported by a compatible model"
+            else:
+                capability_category = "MANUAL_REPORTING_ONLY"
+                runtime_readiness = readiness_str
+                runtime_label = READINESS_LABELS.get(runtime_readiness, "Manual reporting only")
+        elif spec.get("model_type") == "image_classification":
+            if is_model_available:
+                capability_category = "CLASSIFICATION_AVAILABLE"
+                runtime_readiness = ModelReadinessStatus.CLASSIFICATION_AVAILABLE.value
+                runtime_label = "Classification model available"
+            else:
+                capability_category = "CLASSIFICATION_UNAVAILABLE"
+                runtime_readiness = ModelReadinessStatus.CLASSIFICATION_UNAVAILABLE.value
+                runtime_label = "Classification intended (model unavailable)"
+        else:
+            capability_category = "MANUAL_REPORTING_ONLY"
+            runtime_readiness = ModelReadinessStatus.MANUAL_REPORTING_ONLY.value
+            runtime_label = "Manual reporting only"
+
         result.append({
             "name": name,
             "domain": spec.get("domain", "").value if hasattr(spec.get("domain"), "value") else str(spec.get("domain")),
             "is_active_scope": True,
             "readiness": readiness_str,
             "readiness_label": READINESS_LABELS.get(readiness_str, readiness_str),
+            "runtime_readiness": runtime_readiness,
+            "runtime_label": runtime_label,
+            "capability_category": capability_category,
             "model_type": spec.get("model_type"),
-            "model_id": spec.get("model_id"),
+            "model_id": model_id,
+            "model_loaded": is_model_available,
             "default_dept_code": spec.get("default_dept_code"),
             "default_dept_name": spec.get("default_dept_name"),
             "base_risk_score": spec.get("base_risk_score"),

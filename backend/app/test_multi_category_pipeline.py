@@ -435,5 +435,150 @@ class TestCivicVisionPipeline(unittest.TestCase):
         session.close()
         self.assertEqual(count_before, count_after, "No orphaned issues should be created on upload failure!")
 
+    def test_16_classifier_unavailable_truthful_reporting(self):
+        """Verify truthful reporting when classification models are intended but weights are missing."""
+        from app.services.models.registry import model_registry
+
+        # 1. Verify adapter load status in runtime environment
+        irdid_adapter = model_registry.get_adapter("irdid-classifier-candidate")
+        self.assertIsNotNone(irdid_adapter, "IRDIDClassificationAdapter should be registered in model_registry")
+        self.assertFalse(irdid_adapter.is_available, "IRDID weights must NOT be claimed as available without real weights file")
+
+        # 2. Verify infer() returns truthful unsupported status
+        test_img = os.path.join(self.temp_dir, "test_dummy.jpg")
+        Image.new("RGB", (100, 100), color="blue").save(test_img)
+        res_infer = irdid_adapter.infer(test_img)
+        self.assertEqual(res_infer["status"], "unsupported")
+        self.assertEqual(len(res_infer["raw_detections"]), 0)
+        self.assertIn("not found", res_infer["error_message"])
+
+        # 3. Verify /categories endpoint reports CLASSIFICATION_UNAVAILABLE and model_loaded: False
+        res_cat = self.client.get("/api/v1/issues/categories")
+        self.assertEqual(res_cat.status_code, 200)
+        cats = {c["name"]: c for c in res_cat.json()["active_categories"]}
+        self.assertIn("Damaged Road Surface", cats)
+        self.assertIn("Waterlogging", cats)
+
+        drs = cats["Damaged Road Surface"]
+        self.assertEqual(drs["capability_category"], "CLASSIFICATION_UNAVAILABLE")
+        self.assertFalse(drs["model_loaded"])
+
+        wl = cats["Waterlogging"]
+        self.assertEqual(wl["capability_category"], "CLASSIFICATION_UNAVAILABLE")
+        self.assertFalse(wl["model_loaded"])
+
+        # 4. Verify manual citizen reporting succeeds when model is unavailable
+        payload_manual = {
+            "title": "Manual report: Weathered shoulder along bypass",
+            "description": "Observed crumbling asphalt edge",
+            "issue_type": "Damaged Road Surface",
+            "latitude": 13.0850,
+            "longitude": 80.2730,
+            "address": "Bypass Road Km 12",
+            "original_image_url": "/uploads/original/shoulder.jpg",
+            "ai_confidence": 0.0,
+            "severity": "MEDIUM",
+            "priority_score": 50.0,
+            "bounding_box_json": "[]",
+            "ai_analysis_status": "MANUAL_OR_UNAVAILABLE"
+        }
+        res_rep = self.client.post("/api/v1/issues", json=payload_manual, headers=self.citizen_headers)
+        self.assertEqual(res_rep.status_code, 200)
+        rep_data = res_rep.json()
+        self.assertEqual(rep_data["status"], "REPORTED")
+        self.assertEqual(rep_data["issue_type"], "Damaged Road Surface")
+        self.assertEqual(rep_data["department"]["code"], "DEPT_PWD")
+        self.assertEqual(rep_data["ai_analysis_status"], "MANUAL_OR_UNAVAILABLE")
+
+    def test_17_classifier_available_mock_contract_verification(self):
+        """
+        Verify the architectural contract and schema handling when a classification model IS available.
+        NOTE: This test uses a controlled mock adapter solely to verify pipeline schema and interface
+        correctness (zero synthetic boxes, truthful provenance, department routing). It does NOT claim
+        real-world model accuracy.
+        """
+        from typing import List, Dict, Any
+        from app.services.models.registry import model_registry
+        from app.services.models.base_adapter import BaseDefectModelAdapter
+
+        class ControlledMockClassifier(BaseDefectModelAdapter):
+            @property
+            def model_id(self) -> str:
+                return "mock-irdid-classifier-v1"
+
+            @property
+            def supported_categories(self) -> List[str]:
+                return ["Damaged Road Surface", "Waterlogging"]
+
+            @property
+            def is_available(self) -> bool:
+                return True
+
+            def infer(self, image_path: str) -> Dict[str, Any]:
+                return {
+                    "status": "success",
+                    "model_id": self.model_id,
+                    "raw_detections": [
+                        {
+                            "class": "Damaged Road Surface",
+                            "raw_class": "broken_edges",
+                            "confidence": 0.88,
+                            "bounding_box": None  # Genuine classification without bounding box
+                        }
+                    ],
+                    "execution_time_ms": 15.0,
+                    "error_message": None
+                }
+
+        mock_adapter = ControlledMockClassifier()
+        orig_adapters = dict(model_registry._adapters)
+        try:
+            # Register mock adapter
+            model_registry._adapters[mock_adapter.model_id] = mock_adapter
+
+            # Run analyze_issue_image on a temporary test image
+            test_img = os.path.join(self.temp_dir, "test_classified_scene.jpg")
+            Image.new("RGB", (640, 480), color="gray").save(test_img)
+
+            result = analyze_issue_image(test_img)
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["issue_type"], "Damaged Road Surface")
+            self.assertAlmostEqual(result["confidence"], 0.88, places=2)
+            # Crucial truthfulness check: Bounding boxes list MUST be empty for classification!
+            self.assertEqual(result["bounding_boxes"], [], "Classification must NOT produce synthetic bounding boxes!")
+            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["defect_area_ratio"], 0.0)
+            self.assertFalse(result["is_real_yolo"], "Classification must not be attributed to YOLO")
+            # Detected defects must record bounding_box as None
+            self.assertIsNone(result["detected_defects"][0]["bounding_box"])
+
+            # Verify report creation with this result persists truthfully
+            payload = {
+                "title": "Damaged Road Surface Verified Scene",
+                "description": "Scene classification test",
+                "issue_type": "Damaged Road Surface",
+                "latitude": 13.0860,
+                "longitude": 80.2740,
+                "address": "Test Highway",
+                "original_image_url": "/uploads/original/test_classified_scene.jpg",
+                "ai_confidence": result["confidence"],
+                "severity": result["severity"],
+                "priority_score": result["priority_score"],
+                "bounding_box_json": json.dumps(result["bounding_boxes"]),
+                "detected_defects_json": json.dumps(result["detected_defects"]),
+                "model_provenance_json": json.dumps(result["model_provenance"]),
+                "ai_analysis_status": "SUCCESS"
+            }
+            res_post = self.client.post("/api/v1/issues", json=payload, headers=self.citizen_headers)
+            self.assertEqual(res_post.status_code, 200)
+            issue_data = res_post.json()
+            self.assertEqual(issue_data["status"], "AI_ANALYZED")
+            self.assertEqual(issue_data["issue_type"], "Damaged Road Surface")
+            self.assertEqual(issue_data["department"]["code"], "DEPT_PWD")
+            self.assertEqual(issue_data["images"][0]["bounding_box_json"], "[]")
+        finally:
+            # Restore model registry to pristine state
+            model_registry._adapters = orig_adapters
+
 if __name__ == "__main__":
     unittest.main()

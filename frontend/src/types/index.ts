@@ -6,18 +6,29 @@ export enum UserRole {
 
 export enum ModelReadinessStatus {
   OBJECT_DETECTION_SUPPORTED = 'OBJECT_DETECTION_SUPPORTED',
+  CLASSIFICATION_AVAILABLE = 'CLASSIFICATION_AVAILABLE',
+  CLASSIFICATION_UNAVAILABLE = 'CLASSIFICATION_UNAVAILABLE',
   IMAGE_CLASSIFICATION_ONLY = 'IMAGE_CLASSIFICATION_ONLY',
   PENDING_MANUAL_TRAINING = 'PENDING_MANUAL_TRAINING',
   INSUFFICIENT_SUITABLE_DATA = 'INSUFFICIENT_SUITABLE_DATA',
+  MANUAL_REPORTING_ONLY = 'MANUAL_REPORTING_ONLY',
   ANALYSIS_FAILED = 'ANALYSIS_FAILED',
   FUTURE_SCOPE = 'FUTURE_SCOPE',
 }
+
+export type CapabilityCategoryType =
+  | 'object_detection_supported'
+  | 'classification_available'
+  | 'classification_unavailable'
+  | 'manual_reporting_only';
 
 export interface DefectCategoryMeta {
   name: string;
   domain: 'Road' | 'Sanitation' | 'Drainage';
   capability: ModelReadinessStatus;
   capabilityLabel: string;
+  capabilityCategory: CapabilityCategoryType;
+  isModelAvailable: boolean;
   modelType: 'object_detection' | 'image_classification' | 'pending';
   description: string;
 }
@@ -29,6 +40,8 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     domain: 'Road',
     capability: ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED,
     capabilityLabel: 'Object detection supported by a compatible model',
+    capabilityCategory: 'object_detection_supported',
+    isModelAvailable: true,
     modelType: 'object_detection',
     description: 'Cavity or depression in asphalt (YOLOv8 RDD2020 India).'
   },
@@ -37,6 +50,8 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     domain: 'Road',
     capability: ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED,
     capabilityLabel: 'Object detection supported by a compatible model',
+    capabilityCategory: 'object_detection_supported',
+    isModelAvailable: true,
     modelType: 'object_detection',
     description: 'Fracture parallel to road direction (YOLOv8 RDD2020 India).'
   },
@@ -45,6 +60,8 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     domain: 'Road',
     capability: ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED,
     capabilityLabel: 'Object detection supported by a compatible model',
+    capabilityCategory: 'object_detection_supported',
+    isModelAvailable: true,
     modelType: 'object_detection',
     description: 'Fracture perpendicular to centerline (YOLOv8 RDD2020 India; 9 test samples).'
   },
@@ -53,23 +70,29 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     domain: 'Road',
     capability: ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED,
     capabilityLabel: 'Object detection supported by a compatible model',
+    capabilityCategory: 'object_detection_supported',
+    isModelAvailable: true,
     modelType: 'object_detection',
     description: 'Interconnected fatigue fractures (YOLOv8 RDD2020 India).'
   },
   {
     name: 'Damaged Road Surface',
     domain: 'Road',
-    capability: ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY,
-    capabilityLabel: 'Image classification only',
+    capability: ModelReadinessStatus.CLASSIFICATION_UNAVAILABLE,
+    capabilityLabel: 'Classification intended (model unavailable)',
+    capabilityCategory: 'classification_unavailable',
+    isModelAvailable: false,
     modelType: 'image_classification',
-    description: 'Raveling / weathered shoulder (IRDID broken_edges; whole-image scene classification, no bounding boxes).'
+    description: 'Raveling / weathered shoulder. Architecture: whole-image scene classification without bounding boxes (IRDID candidate). Runtime status: classifier model not loaded; manual reporting active.'
   },
   // Sanitation defects (3)
   {
     name: 'Garbage Accumulation',
     domain: 'Sanitation',
     capability: ModelReadinessStatus.PENDING_MANUAL_TRAINING,
-    capabilityLabel: 'Pending manual training',
+    capabilityLabel: 'Manual reporting only (pending training)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
     modelType: 'pending',
     description: 'Accumulated solid waste (Indian Domestic Trash dataset pending training).'
   },
@@ -77,7 +100,9 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     name: 'Illegal Dumping',
     domain: 'Sanitation',
     capability: ModelReadinessStatus.PENDING_MANUAL_TRAINING,
-    capabilityLabel: 'Pending manual training',
+    capabilityLabel: 'Manual reporting only (pending training)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
     modelType: 'pending',
     description: 'Unauthorized large-scale disposal of rubble or commercial waste.'
   },
@@ -85,7 +110,9 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     name: 'Overflowing Garbage Bins',
     domain: 'Sanitation',
     capability: ModelReadinessStatus.PENDING_MANUAL_TRAINING,
-    capabilityLabel: 'Pending manual training',
+    capabilityLabel: 'Manual reporting only (pending training)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
     modelType: 'pending',
     description: 'Municipal dustbin exceeding capacity with waste spillover.'
   },
@@ -94,7 +121,9 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     name: 'Blocked Drains',
     domain: 'Drainage',
     capability: ModelReadinessStatus.INSUFFICIENT_SUITABLE_DATA,
-    capabilityLabel: 'Insufficient suitable data',
+    capabilityLabel: 'Manual reporting only (insufficient suitable data)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
     modelType: 'pending',
     description: 'Stormwater canal clogged by silt/debris. Field collection required.'
   },
@@ -102,23 +131,29 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     name: 'Overflowing Drains',
     domain: 'Drainage',
     capability: ModelReadinessStatus.INSUFFICIENT_SUITABLE_DATA,
-    capabilityLabel: 'Insufficient suitable data',
+    capabilityLabel: 'Manual reporting only (insufficient suitable data)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
     modelType: 'pending',
     description: 'Drain water spilling over canal banks onto roadways. Field collection required.'
   },
   {
     name: 'Waterlogging',
     domain: 'Drainage',
-    capability: ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY,
-    capabilityLabel: 'Image classification only',
+    capability: ModelReadinessStatus.CLASSIFICATION_UNAVAILABLE,
+    capabilityLabel: 'Classification intended (model unavailable)',
+    capabilityCategory: 'classification_unavailable',
+    isModelAvailable: false,
     modelType: 'image_classification',
-    description: 'Whole-image submerged road scene (IRDID waterlogged_roads; distinct from localized water-region detection, no bounding boxes).'
+    description: 'Whole-image submerged road scene. Architecture: scene classification without bounding boxes (IRDID candidate). Runtime status: classifier model not loaded; manual reporting active.'
   },
   {
     name: 'Damaged Drainage Covers',
     domain: 'Drainage',
     capability: ModelReadinessStatus.INSUFFICIENT_SUITABLE_DATA,
-    capabilityLabel: 'Insufficient suitable data',
+    capabilityLabel: 'Manual reporting only (insufficient suitable data)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
     modelType: 'pending',
     description: 'Broken, collapsed, or displaced stormwater drain slabs/culvert grates. Distinct from sewer manholes.'
   },

@@ -292,22 +292,22 @@ export const ReportIssuePage: React.FC = () => {
                       className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
                     >
                       <optgroup label="Road Infrastructure Defects (5)">
-                        <option value="Pothole">Potholes [Detection Supported]</option>
-                        <option value="Longitudinal Crack">Longitudinal Cracks [Detection Supported]</option>
-                        <option value="Transverse Crack">Transverse Cracks [Detection Supported]</option>
-                        <option value="Alligator Crack">Alligator Cracks [Detection Supported]</option>
-                        <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Only]</option>
+                        <option value="Pothole">Potholes [Object Detection Supported]</option>
+                        <option value="Longitudinal Crack">Longitudinal Cracks [Object Detection Supported]</option>
+                        <option value="Transverse Crack">Transverse Cracks [Object Detection Supported (9 test samples)]</option>
+                        <option value="Alligator Crack">Alligator Cracks [Object Detection Supported]</option>
+                        <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Intended — Model Unavailable]</option>
                       </optgroup>
                       <optgroup label="Sanitation & Waste Defects (3)">
-                        <option value="Garbage Accumulation">Garbage Accumulation [Pending Manual Training]</option>
-                        <option value="Illegal Dumping">Illegal Dumping [Pending Manual Training]</option>
-                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Pending Manual Training]</option>
+                        <option value="Garbage Accumulation">Garbage Accumulation [Manual Reporting Only — Pending Training]</option>
+                        <option value="Illegal Dumping">Illegal Dumping [Manual Reporting Only — Pending Training]</option>
+                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Manual Reporting Only — Pending Training]</option>
                       </optgroup>
                       <optgroup label="Drainage & Flood Defects (4)">
-                        <option value="Blocked Drains">Blocked Drains [Insufficient Suitable Data]</option>
-                        <option value="Overflowing Drains">Overflowing Drains [Insufficient Suitable Data]</option>
-                        <option value="Waterlogging">Waterlogging [Classification Only]</option>
-                        <option value="Damaged Drainage Covers">Damaged Drainage Covers [Insufficient Suitable Data]</option>
+                        <option value="Blocked Drains">Blocked Drains [Manual Reporting Only — Insufficient Field Data]</option>
+                        <option value="Overflowing Drains">Overflowing Drains [Manual Reporting Only — Insufficient Field Data]</option>
+                        <option value="Waterlogging">Waterlogging [Classification Intended — Model Unavailable]</option>
+                        <option value="Damaged Drainage Covers">Damaged Drainage Covers [Manual Reporting Only — Insufficient Field Data]</option>
                       </optgroup>
                     </select>
 
@@ -315,19 +315,17 @@ export const ReportIssuePage: React.FC = () => {
                     {(() => {
                       const meta = ACTIVE_12_CATEGORIES.find(c => c.name === manualCategory);
                       if (!meta) return null;
-                      const isDetection = meta.capability === ModelReadinessStatus.OBJECT_DETECTION_SUPPORTED;
-                      const isClassification = meta.capability === ModelReadinessStatus.IMAGE_CLASSIFICATION_ONLY;
-                      const isPending = meta.capability === ModelReadinessStatus.PENDING_MANUAL_TRAINING;
+                      const cap = meta.capabilityCategory;
                       
                       return (
                         <div className="mt-2 p-2.5 rounded-lg bg-slate-900/80 border border-civic-border text-[11px] space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono uppercase text-slate-400">Model Capability:</span>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
-                              isDetection ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                              isClassification ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
-                              isPending ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                              'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                              cap === 'object_detection_supported' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                              cap === 'classification_available' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
+                              cap === 'classification_unavailable' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                              'bg-slate-700/50 text-slate-300 border border-slate-600/50'
                             }`}>
                               {meta.capabilityLabel}
                             </span>
