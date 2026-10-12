@@ -127,4 +127,20 @@ yolo classify train data=datasets/indian_infrastructure/irdid_prepared_classific
 
 ## 5. Model Registration & Integration Procedure
 
-When a new model completes manual training
+When a new model completes manual training:
+1. Copy the resulting weights to a permanent location under `backend/app/ai_model/`:
+   ```powershell
+   New-Item -ItemType Directory -Force -Path "backend/app/ai_model/classifier/weights"
+   Copy-Item "runs/classify/irdid_cls_manual/weights/best.pt" -Destination "backend/app/ai_model/classifier/weights/best.pt"
+   ```
+2. Verify its SHA-256 hash:
+   ```powershell
+   Get-FileHash -Algorithm SHA256 "backend/app/ai_model/classifier/weights/best.pt"
+   ```
+3. Create an adapter class inheriting from `BaseDefectModelAdapter` in `backend/app/services/models/`.
+4. Register the adapter in `backend/app/services/models/registry.py`.
+5. Run the regression test suite:
+   ```powershell
+   python backend/app/test_multi_category_pipeline.py
+   python backend/app/test_master_audit.py
+   ```
