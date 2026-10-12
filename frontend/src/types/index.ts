@@ -5,12 +5,28 @@ export enum UserRole {
 }
 
 export enum IssueType {
+  // Road-related defects (5)
   POTHOLE = 'Pothole',
+  LONGITUDINAL_CRACK = 'Longitudinal Crack',
+  TRANSVERSE_CRACK = 'Transverse Crack',
+  ALLIGATOR_CRACK = 'Alligator Crack',
+  DAMAGED_ROAD_SURFACE = 'Damaged Road Surface',
+  ROAD_DAMAGE = 'Road Damage',
+
+  // Sanitation defects (3)
   GARBAGE = 'Garbage Accumulation',
+  ILLEGAL_DUMPING = 'Illegal Dumping',
+  OVERFLOWING_BINS = 'Overflowing Garbage Bins',
+
+  // Drainage defects (4)
+  BLOCKED_DRAIN = 'Blocked Drains',
+  OVERFLOWING_DRAIN = 'Overflowing Drains',
   WATERLOGGING = 'Waterlogging',
+  DAMAGED_DRAINAGE_COVER = 'Damaged Drainage Covers',
+
+  // Utilities
   STREETLIGHT = 'Broken Streetlight',
   MANHOLE = 'Open Manhole',
-  ROAD_DAMAGE = 'Road Damage',
 }
 
 export enum IssueStatus {
@@ -67,6 +83,13 @@ export interface AIAnalysisResult {
   recommended_department: string | null;
   recommended_department_code: string | null;
   bounding_boxes: BoundingBox[];
+  detected_defects?: Array<{
+    category: string;
+    confidence: number;
+    model_id?: string;
+    bounding_box?: number[];
+  }>;
+  model_provenance?: Record<string, any>;
   defect_area_ratio: number;
   annotated_image_url?: string;
   original_image_url: string;
@@ -128,6 +151,10 @@ export interface Issue {
   resolved_at?: string | null;
   closed_at?: string | null;
   duplicate_count: number;
+  detected_defects_json?: string | null;
+  model_provenance_json?: string | null;
+  verified_category?: string | null;
+  ai_analysis_status?: string | null;
   created_at: string;
   updated_at: string;
 }

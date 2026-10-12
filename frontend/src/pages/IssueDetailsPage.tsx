@@ -25,6 +25,7 @@ export const IssueDetailsPage: React.FC = () => {
   const [newStatus, setNewStatus] = useState<IssueStatus>(IssueStatus.IN_PROGRESS);
   const [notes, setNotes] = useState('');
   const [selectedDeptId, setSelectedDeptId] = useState<number>(0);
+  const [verifiedCategory, setVerifiedCategory] = useState<string>('');
   const [updating, setUpdating] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -36,6 +37,8 @@ export const IssueDetailsPage: React.FC = () => {
       setIssue(data);
       setNewStatus(data.status);
       if (data.department_id) setSelectedDeptId(data.department_id);
+      if (data.verified_category) setVerifiedCategory(data.verified_category);
+      else setVerifiedCategory(data.issue_type);
     } catch {
       setError('Failed to load issue details.');
     } finally {
@@ -47,6 +50,22 @@ export const IssueDetailsPage: React.FC = () => {
     fetchIssue();
     departmentService.listDepartments().then(setDepartments).catch(console.error);
   }, [id]);
+
+  const handleVerifyCategory = async () => {
+    if (!issue || !verifiedCategory) return;
+    setUpdating(true);
+    setActionFeedback(null);
+    try {
+      await issueService.verifyCategory(issue.id, verifiedCategory, notes);
+      setNotes('');
+      await fetchIssue(true);
+      setActionFeedback({ type: 'success', message: `Defect category verified as '${verifiedCategory}'.` });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.response?.data?.detail || 'Failed to verify category.' });
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const handleUpdateStatus = async () => {
     if (!issue) return;
@@ -189,7 +208,7 @@ export const IssueDetailsPage: React.FC = () => {
                   {[
                     { label: 'AI Confidence', value: `${(issue.ai_confidence * 100).toFixed(1)}%`, color: 'text-emerald-400' },
                     { label: 'Priority Score', value: `${issue.priority_score}/100`, color: 'text-amber-400' },
-                    { label: 'Linked Duplicates', value: `${issue.duplicate_count}`, color: 'text-cyan-400' },
+                    { label: 'Analysis Status', value: issue.ai_analysis_status || (issue.ai_confidence > 0 ? 'SUCCESS' : 'MANUAL'), color: 'text-cyan-400' },
                   ].map(item => (
                     <div key={item.label} className="bg-civic-bg border border-civic-border rounded-xl p-3 text-center">
                       <div className="text-[10px] text-slate-500">{item.label}</div>
@@ -197,6 +216,14 @@ export const IssueDetailsPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
+
+                {/* Verified Category Status */}
+                {issue.verified_category && (
+                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Municipal Verified Category:</span>
+                    <span className="font-semibold text-purple-300 font-mono">{issue.verified_category}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -337,6 +364,49 @@ export const IssueDetailsPage: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              {/* Category Review & Verification */}
+              <div className="pt-4 border-t border-civic-border space-y-3">
+                <div>
+                  <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Review / Correct Defect Category</label>
+                  <select
+                    value={verifiedCategory}
+                    onChange={(e) => setVerifiedCategory(e.target.value)}
+                    className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-all"
+                  >
+                    <optgroup label="Road Infrastructure Defects">
+                      <option value="Pothole">Potholes</option>
+                      <option value="Longitudinal Crack">Longitudinal Cracks</option>
+                      <option value="Transverse Crack">Transverse Cracks</option>
+                      <option value="Alligator Crack">Alligator Cracks</option>
+                      <option value="Damaged Road Surface">Damaged Road Surfaces</option>
+                      <option value="Road Damage">Road Damage (General)</option>
+                    </optgroup>
+                    <optgroup label="Sanitation & Waste Defects">
+                      <option value="Garbage Accumulation">Garbage Accumulation</option>
+                      <option value="Illegal Dumping">Illegal Dumping</option>
+                      <option value="Overflowing Garbage Bins">Overflowing Garbage Bins</option>
+                    </optgroup>
+                    <optgroup label="Drainage & Flood Defects">
+                      <option value="Blocked Drains">Blocked Drains</option>
+                      <option value="Overflowing Drains">Overflowing Drains</option>
+                      <option value="Waterlogging">Waterlogging</option>
+                      <option value="Damaged Drainage Covers">Damaged Drainage Covers</option>
+                    </optgroup>
+                    <optgroup label="Utility Safety Defects">
+                      <option value="Open Manhole">Open Manholes</option>
+                      <option value="Broken Streetlight">Broken Streetlights</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <button
+                  onClick={handleVerifyCategory}
+                  disabled={updating || !verifiedCategory}
+                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  Verify Defect Category
+                </button>
+              </div>
             </div>
           )}
         </div>

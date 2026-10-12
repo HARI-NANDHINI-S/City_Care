@@ -1,16 +1,39 @@
 from app.models.issue import IssueType, SeverityLevel
 from app.core.config import settings
+from app.core.defect_registry import DEFECT_REGISTRY
 
 CATEGORY_RISK_SCORES = {
-    IssueType.MANHOLE: 95.0,
+    # Drainage
+    IssueType.DAMAGED_DRAINAGE_COVER: 90.0,
     IssueType.WATERLOGGING: 80.0,
-    IssueType.POTHOLE: 70.0,
+    IssueType.OVERFLOWING_DRAIN: 80.0,
+    IssueType.BLOCKED_DRAIN: 75.0,
+
+    # Road
+    IssueType.POTHOLE: 75.0,
+    IssueType.ALLIGATOR_CRACK: 70.0,
+    IssueType.DAMAGED_ROAD_SURFACE: 65.0,
     IssueType.ROAD_DAMAGE: 65.0,
+    IssueType.LONGITUDINAL_CRACK: 60.0,
+    IssueType.TRANSVERSE_CRACK: 60.0,
+
+    # Sanitation
+    IssueType.ILLEGAL_DUMPING: 55.0,
+    IssueType.OVERFLOWING_BINS: 52.0,
+    IssueType.GARBAGE: 50.0,
+
+    # Utility
+    IssueType.MANHOLE: 95.0,
     IssueType.STREETLIGHT: 50.0,
-    IssueType.GARBAGE: 45.0,
 }
 
 def calculate_category_risk(issue_type: str) -> float:
+    # 1. Check registry
+    reg = DEFECT_REGISTRY.get(str(issue_type))
+    if reg and "base_risk_score" in reg:
+        return reg["base_risk_score"]
+
+    # 2. Check IssueType enums
     for key, score in CATEGORY_RISK_SCORES.items():
         if key.value.lower() == str(issue_type).lower() or key.name.lower() == str(issue_type).lower():
             return score

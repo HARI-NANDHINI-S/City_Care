@@ -1,8 +1,8 @@
 import os
 import json
 import uuid
-import random
-from typing import Dict, Any, List
+import time
+from typing import Dict, Any, List, Optional
 from PIL import Image
 import numpy as np
 
@@ -13,71 +13,75 @@ except ImportError:
     HAS_OPENCV = False
 
 from app.core.config import settings
-from app.models.issue import IssueType
+from app.core.defect_registry import DEFECT_REGISTRY, get_category_spec
 from app.services.routing_service import get_recommended_department_name, get_recommended_department_code
 from app.services.priority_service import calculate_priority_score, get_severity_from_priority
-
-CLASSES_LIST = [
-    IssueType.POTHOLE.value,
-    IssueType.GARBAGE.value,
-    IssueType.WATERLOGGING.value,
-    IssueType.STREETLIGHT.value,
-    IssueType.MANHOLE.value,
-    IssueType.ROAD_DAMAGE.value,
-]
-
-def generate_dev_heuristic_analysis(image_path: str) -> Dict[str, Any]:
-    # Development fallback remains ONLY for tests or explicit demo routes,
-    # but MUST NOT be used in the production AI path.
-    return {
-        "error": "Heuristic fallback is disabled in production.",
-        "is_real_yolo": False
-    }
+from app.services.models.registry import model_registry
 
 def analyze_issue_image(image_path: str) -> Dict[str, Any]:
+    """
+    Unified AI inference pipeline:
+    Image validation -> Multi-model routing -> Multi-defect detection -> Postprocessing
+    -> Category mapping -> Priority score calculation -> Annotation generation -> Provenance recording.
+    """
     filename = os.path.basename(image_path)
+    
+    # 1. Validate image format & dimensions
     try:
         with Image.open(image_path) as img:
             width, height = img.size
-    except Exception:
-        width, height = 800, 600
-
-    try:
-        from app.ai_model.yolo.predict import predict as yolo_predict
-        yolo_result = yolo_predict(image_path)
     except Exception as e:
-        yolo_result = {"status": "error", "reason": f"YOLO model failed to load or predict: {str(e)}"}
-    
-    if yolo_result.get("status") != "success":
         return {
-            "error": "Real YOLO model not available.",
+            "status": "analysis_failed",
+            "message": f"Corrupt or invalid image file: {str(e)}",
             "is_real_yolo": False,
-            "reason": yolo_result.get("reason", "YOLO model failed to load or predict.")
+            "detected_defects": [],
+            "model_provenance": {}
         }
-        
-    detections = yolo_result.get("detections", [])
-    
-    # 1. Verify class mapping: Map known RDD2020 classes
-    YOLO_CLASS_MAPPING = {
-        "D00": IssueType.ROAD_DAMAGE.value,
-        "D10": IssueType.ROAD_DAMAGE.value,
-        "D20": IssueType.ROAD_DAMAGE.value,
-        "D40": IssueType.POTHOLE.value,
-    }
-    
-    valid_detections = []
-    for det in detections:
-        raw_class = det["class"]
-        # If it's already a valid IssueType, keep it. Otherwise check mapping.
-        mapped_class = raw_class if raw_class in CLASSES_LIST else YOLO_CLASS_MAPPING.get(raw_class)
-        if mapped_class:
-            det["mapped_class"] = mapped_class
+
+    # 2. Query available vision model adapters
+    active_adapters = model_registry.get_all_active_adapters()
+    if not active_adapters:
+        return {
+            "status": "vision_unavailable",
+            "message": "No computer vision defect models are currently loaded or available.",
+            "is_real_yolo": False,
+            "detected_defects": [],
+            "model_provenance": {}
+        }
+
+    all_raw_detections: List[Dict[str, Any]] = []
+    model_provenance: Dict[str, Any] = {}
+
+    for adapter in active_adapters:
+        result = adapter.infer(image_path)
+        model_provenance[adapter.model_id] = {
+            "status": result.get("status"),
+            "execution_time_ms": result.get("execution_time_ms"),
+            "detections_count": len(result.get("raw_detections", [])),
+            "supported_categories": adapter.supported_categories
+        }
+
+        if result.get("status") == "success":
+            for det in result.get("raw_detections", []):
+                det["source_model"] = adapter.model_id
+                all_raw_detections.append(det)
+
+    # 3. Filter by category-specific confidence threshold and category mapping
+    valid_detections: List[Dict[str, Any]] = []
+    for det in all_raw_detections:
+        category_name = det.get("class")
+        spec = get_category_spec(category_name)
+        threshold = spec.get("confidence_threshold", 0.25) if spec else 0.25
+
+        if det.get("confidence", 0) >= threshold:
             valid_detections.append(det)
-            
+
+    # 4. Handle "No Defect Detected"
     if not valid_detections:
         return {
             "status": "no_detection",
-            "message": "No supported civic issue detected in the image",
+            "message": "No infrastructure defect detected with sufficient confidence in this image.",
             "issue_type": None,
             "confidence": None,
             "severity": None,
@@ -85,90 +89,114 @@ def analyze_issue_image(image_path: str) -> Dict[str, Any]:
             "recommended_department": None,
             "recommended_department_code": None,
             "bounding_boxes": [],
+            "detected_defects": [],
             "defect_area_ratio": 0.0,
             "annotated_image_filename": filename,
             "original_image_filename": filename,
             "is_real_yolo": True,
-            "count": 0
+            "count": 0,
+            "model_provenance": model_provenance
         }
 
-    # Pick the highest confidence detection
-    best_detection = max(valid_detections, key=lambda x: x["confidence"])
-    mapped_type = best_detection["mapped_class"]
-    confidence = best_detection["confidence"]
-    
-    # Calculate defect area ratio for priority
+    # 5. Build geometry, defect area, and multi-defect details
     total_area = width * height
     box_area = 0
-    bounding_boxes = []
-    
+    bounding_boxes: List[Dict[str, Any]] = []
+    detected_defects: List[Dict[str, Any]] = []
+
     for det in valid_detections:
         coords = det["bounding_box"]
         x1, y1, x2, y2 = coords
-        w = x2 - x1
-        h = y2 - y1
+        w = max(0, x2 - x1)
+        h = max(0, y2 - y1)
         box_area += (w * h)
-        bounding_boxes.append({
-            "class": det["mapped_class"],  # Use mapped class here
-            "raw_class": det["class"],
-            "confidence": det["confidence"],
+
+        bbox_data = {
+            "class": det["class"],
+            "raw_class": det.get("raw_class", det["class"]),
+            "confidence": round(det["confidence"], 4),
             "x": int(x1),
             "y": int(y1),
             "width": int(w),
             "height": int(h),
             "box_normalized": [
-                round(x1 / width, 3),
-                round(y1 / height, 3),
-                round(w / width, 3),
-                round(h / height, 3)
-            ]
+                round(x1 / width, 3) if width > 0 else 0,
+                round(y1 / height, 3) if height > 0 else 0,
+                round(w / width, 3) if width > 0 else 0,
+                round(h / height, 3) if height > 0 else 0
+            ],
+            "model_id": det.get("source_model")
+        }
+        bounding_boxes.append(bbox_data)
+        detected_defects.append({
+            "category": det["class"],
+            "confidence": round(det["confidence"], 4),
+            "model_id": det.get("source_model"),
+            "bounding_box": [int(x1), int(y1), int(w), int(h)]
         })
-        
+
     defect_area_ratio = round(box_area / total_area, 3) if total_area > 0 else 0.0
     defect_area_ratio = min(1.0, defect_area_ratio)
 
-    # Annotated image (reuse existing OpenCV drawing if CV2 is available)
+    # 6. Primary defect selection (highest confidence / highest risk)
+    best_detection = max(valid_detections, key=lambda x: x["confidence"])
+    primary_category = best_detection["class"]
+    primary_confidence = best_detection["confidence"]
+
+    # 7. Render bounding box overlay on annotated image
     annotated_filename = f"annotated_{uuid.uuid4().hex[:8]}_{filename}"
     annotated_path = os.path.join(settings.ANNOTATED_IMG_DIR, annotated_filename)
 
     if HAS_OPENCV:
         cv_img = cv2.imread(image_path)
         if cv_img is not None:
+            # Color palette per category
+            colors = {
+                "Pothole": (0, 0, 255),               # Red
+                "Longitudinal Crack": (255, 165, 0),   # Orange
+                "Transverse Crack": (255, 255, 0),     # Yellow
+                "Alligator Crack": (0, 255, 255),      # Cyan
+                "Garbage Accumulation": (0, 255, 0),   # Green
+                "Waterlogging": (255, 0, 255),         # Magenta
+            }
             for bbox in bounding_boxes:
                 bx, by, bw, bh = bbox["x"], bbox["y"], bbox["width"], bbox["height"]
-                cv2.rectangle(cv_img, (bx, by), (bx + bw, by + bh), (0, 255, 0), 3)
+                col = colors.get(bbox["class"], (0, 255, 0))
+                cv2.rectangle(cv_img, (bx, by), (bx + bw, by + bh), col, 3)
                 label = f"{bbox['class']} ({int(bbox['confidence']*100)}%)"
-                cv2.putText(cv_img, label, (bx + 5, by - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                cv2.putText(cv_img, label, (bx + 5, max(15, by - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             cv2.imwrite(annotated_path, cv_img)
         else:
             annotated_filename = filename
     else:
         annotated_filename = filename
 
+    # 8. Calculate Priority & Severity & Routing
     priority_score = calculate_priority_score(
-        issue_type=mapped_type,
-        ai_confidence=confidence,
+        issue_type=primary_category,
+        ai_confidence=primary_confidence,
         defect_area_ratio=defect_area_ratio,
         duplicate_count=0,
         hours_unresolved=0.0
     )
     severity = get_severity_from_priority(priority_score)
-    dept_name = get_recommended_department_name(mapped_type)
-    dept_code = get_recommended_department_code(mapped_type)
+    dept_name = get_recommended_department_name(primary_category)
+    dept_code = get_recommended_department_code(primary_category)
 
     return {
         "status": "success",
-        "issue_type": mapped_type,
-        "confidence": confidence,
+        "issue_type": primary_category,
+        "confidence": primary_confidence,
         "severity": severity.value,
         "priority_score": priority_score,
         "recommended_department": dept_name,
         "recommended_department_code": dept_code,
         "bounding_boxes": bounding_boxes,
+        "detected_defects": detected_defects,
         "defect_area_ratio": defect_area_ratio,
         "annotated_image_filename": annotated_filename,
         "original_image_filename": filename,
         "is_real_yolo": True,
-        "count": len(bounding_boxes)
+        "count": len(bounding_boxes),
+        "model_provenance": model_provenance
     }
-

@@ -117,7 +117,10 @@ export const ReportIssuePage: React.FC = () => {
         ai_confidence: isManualMode ? 0 : (aiResult?.confidence || 0),
         severity: isManualMode ? manualSeverity : (aiResult?.severity || 'MEDIUM'),
         priority_score: isManualMode ? 50.0 : (aiResult?.priority_score || 0),
-        bounding_box_json: isManualMode ? "[]" : JSON.stringify(aiResult?.bounding_boxes || [])
+        bounding_box_json: isManualMode ? "[]" : JSON.stringify(aiResult?.bounding_boxes || []),
+        detected_defects_json: isManualMode ? "[]" : JSON.stringify(aiResult?.detected_defects || []),
+        model_provenance_json: isManualMode ? "{}" : JSON.stringify(aiResult?.model_provenance || {}),
+        ai_analysis_status: aiResult?.status || (isManualMode ? 'MANUAL' : 'SUCCESS')
       });
 
       navigate(`/issue/${createdIssue.id}`);
@@ -288,12 +291,29 @@ export const ReportIssuePage: React.FC = () => {
                       onChange={(e) => setManualCategory(e.target.value)}
                       className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
                     >
-                      <option value="Pothole">Pothole</option>
-                      <option value="Road Damage">Road Damage</option>
-                      <option value="Garbage Accumulation">Garbage Accumulation</option>
-                      <option value="Waterlogging">Waterlogging</option>
-                      <option value="Broken Streetlight">Broken Streetlight</option>
-                      <option value="Open Manhole">Open Manhole</option>
+                      <optgroup label="Road Infrastructure Defects">
+                        <option value="Pothole">Potholes</option>
+                        <option value="Longitudinal Crack">Longitudinal Cracks</option>
+                        <option value="Transverse Crack">Transverse Cracks</option>
+                        <option value="Alligator Crack">Alligator Cracks</option>
+                        <option value="Damaged Road Surface">Damaged Road Surfaces</option>
+                        <option value="Road Damage">Road Damage (General)</option>
+                      </optgroup>
+                      <optgroup label="Sanitation & Waste Defects">
+                        <option value="Garbage Accumulation">Garbage Accumulation</option>
+                        <option value="Illegal Dumping">Illegal Dumping</option>
+                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins</option>
+                      </optgroup>
+                      <optgroup label="Drainage & Flood Defects">
+                        <option value="Blocked Drains">Blocked Drains</option>
+                        <option value="Overflowing Drains">Overflowing Drains</option>
+                        <option value="Waterlogging">Waterlogging</option>
+                        <option value="Damaged Drainage Covers">Damaged Drainage Covers</option>
+                      </optgroup>
+                      <optgroup label="Utility Safety Defects">
+                        <option value="Open Manhole">Open Manholes</option>
+                        <option value="Broken Streetlight">Broken Streetlights</option>
+                      </optgroup>
                     </select>
                   </div>
                   <div>
@@ -353,7 +373,7 @@ export const ReportIssuePage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
-                      <div className="text-[10px] font-mono text-slate-500 uppercase">Detected Class</div>
+                      <div className="text-[10px] font-mono text-slate-500 uppercase">Primary Defect</div>
                       <div className="text-sm font-bold text-cyan-400 mt-0.5">{aiResult.issue_type}</div>
                     </div>
                     <div>
@@ -369,6 +389,23 @@ export const ReportIssuePage: React.FC = () => {
                       <div className="text-sm font-bold text-amber-400 font-mono mt-0.5">{aiResult.priority_score}/100</div>
                     </div>
                   </div>
+
+                  {/* Multi-defect list if multiple defects found */}
+                  {aiResult.detected_defects && aiResult.detected_defects.length > 1 && (
+                    <div className="mb-4 pt-3 border-t border-civic-border">
+                      <div className="text-[10px] font-mono text-slate-500 uppercase mb-2">
+                        All Identified Defects ({aiResult.detected_defects.length})
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiResult.detected_defects.map((d, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                            {d.category} ({(d.confidence * 100).toFixed(0)}%)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="pt-3 border-t border-civic-border">
                     <div className="text-[10px] font-mono text-slate-500 uppercase">Auto-Routing Destination</div>
                     <div className="text-xs font-semibold text-purple-400 mt-1 flex items-center gap-1.5">

@@ -59,10 +59,13 @@ def analyze_image(file:UploadFile=File(...), current_user:User=Depends(get_curre
 @router.post('',response_model=IssueDetailOut)
 def create_issue(payload:CreateIssueSchema,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     if current_user.role not in (UserRole.CITIZEN,UserRole.ADMIN): raise HTTPException(403,'Only citizens can submit reports')
-    dept=None
-    # route by department code/name already supplied by AI category
+    
+    # Auto-resolve recommended department if available
     from app.services.routing_service import get_recommended_department_code
-    # If issue has AI confidence, record AI_ANALYZED; if submitted manually or AI was unavailable, record as REPORTED
+    target_code = get_recommended_department_code(payload.issue_type.value)
+    dept = db.query(Department).filter(Department.code == target_code).first()
+
+    # Determine analysis status & initial workflow status
     is_ai_detected = (payload.ai_confidence or 0) > 0 and bool(payload.bounding_box_json and payload.bounding_box_json != "[]")
     initial_status = IssueStatus.AI_ANALYZED if is_ai_detected else IssueStatus.REPORTED
     initial_note = 'AI analysis completed and report submitted.' if is_ai_detected else 'Report submitted with citizen-selected category.'
@@ -81,7 +84,10 @@ def create_issue(payload:CreateIssueSchema,db:Session=Depends(get_db),current_us
         reporter_id=current_user.id,
         department_id=dept.id if dept else None,
         progress_percentage=0,
-        latest_update=initial_note
+        latest_update=initial_note,
+        detected_defects_json=payload.detected_defects_json,
+        model_provenance_json=payload.model_provenance_json,
+        ai_analysis_status=payload.ai_analysis_status or ("SUCCESS" if is_ai_detected else "MANUAL_OR_UNAVAILABLE")
     )
     db.add(issue); db.flush()
     db.add(IssueImage(issue_id=issue.id,original_image_path=payload.original_image_url,annotated_image_path=payload.annotated_image_url,bounding_box_json=payload.bounding_box_json))
@@ -227,3 +233,25 @@ def resolve(issue_id:int,db:Session=Depends(get_db),current_user:User=Depends(ge
 @router.post('/{issue_id}/close',response_model=IssueDetailOut)
 def close(issue_id:int,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     issue=q_issue(db,issue_id); assert_department_access(issue,current_user); issue.closed_at=datetime.utcnow(); history(db,issue,current_user,IssueStatus.CLOSED,'Issue formally closed.',issue.progress_percentage); db.commit(); return q_issue(db,issue.id)
+
+@router.patch('/{issue_id}/verify-category', response_model=IssueDetailOut)
+def verify_category(issue_id: int, payload: VerifyCategorySchema, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role not in (UserRole.ADMIN, UserRole.OFFICER):
+        raise HTTPException(403, 'Only municipal officers or admins can verify and correct defect categories')
+    issue = q_issue(db, issue_id)
+    assert_department_access(issue, current_user)
+    
+    old_cat = issue.verified_category or issue.issue_type.value
+    issue.verified_category = payload.verified_category
+    note = f"Category reviewed and updated: from '{old_cat}' to '{payload.verified_category}'. {payload.notes or ''}".strip()
+    issue.latest_update = note
+    db.add(IssueStatusHistory(
+        issue_id=issue.id,
+        previous_status=issue.status,
+        new_status=issue.status,
+        changed_by_user_id=current_user.id,
+        notes=note,
+        progress_percentage=issue.progress_percentage
+    ))
+    db.commit()
+    return q_issue(db, issue.id)

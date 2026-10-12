@@ -75,6 +75,9 @@ export const issueService = {
     severity: string;
     priority_score: number;
     bounding_box_json?: string;
+    detected_defects_json?: string;
+    model_provenance_json?: string;
+    ai_analysis_status?: string;
   }) => {
     const res = await api.post<Issue>('/issues', data);
     return res.data;
@@ -107,6 +110,10 @@ export const issueService = {
   },
   assignDepartment: async (id: number, department_id: number, notes?: string) => {
     const res = await api.patch<Issue>(`/issues/${id}/assign`, { department_id, notes });
+    return res.data;
+  },
+  verifyCategory: async (id: number, verified_category: string, notes?: string) => {
+    const res = await api.patch<Issue>(`/issues/${id}/verify-category`, { verified_category, notes });
     return res.data;
   },
 };
