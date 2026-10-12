@@ -4,15 +4,24 @@ from app.core.database import get_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.issue import Issue
-from app.ml.models import CivicVisionPriorityModels
-from app.ml.shap_explain import ShapExplainer
-from app.ml.dbscan import SpatialClustering
-from app.ml.dataset import generate_synthetic_priority_dataset
+# Lazy-loaded to prevent top-level import crashes when Windows Application Control blocks unsigned C-extensions
+CivicVisionPriorityModels = None
+ShapExplainer = None
+SpatialClustering = None
+generate_synthetic_priority_dataset = None
+clustering = None
+
+def get_clustering():
+    global clustering, SpatialClustering
+    if clustering is None:
+        try:
+            from app.ml.dbscan import SpatialClustering
+            clustering = SpatialClustering()
+        except Exception as e:
+            clustering = None
+    return clustering
 
 router = APIRouter()
-
-clustering = SpatialClustering()
-
 import os
 
 
@@ -196,7 +205,10 @@ def ml_clusters(db: Session = Depends(get_db)):
             'issue_type': issue.issue_type.value if issue.issue_type else "Pothole",
             'priority_score': issue.priority_score
         })
-    res = clustering.cluster_issues(issues_list)
+    c = get_clustering()
+    if c is None:
+        return []
+    res = c.cluster_issues(issues_list)
     return res
 
 @router.get("/lab/datasets")
