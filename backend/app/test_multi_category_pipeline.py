@@ -580,5 +580,144 @@ class TestCivicVisionPipeline(unittest.TestCase):
             # Restore model registry to pristine state
             model_registry._adapters = orig_adapters
 
+    def test_18_yolo_first_spatial_arbitration_dual_model_coexistence(self):
+        """
+        Verify Phase 2 YOLO-first detection arbitration:
+        When both a localized YOLO detection (Pothole at 0.65) and a whole-image
+        classification (Damaged Road Surface at 0.92) are valid for the same image:
+        1. Localized YOLO detection takes precedence as primary issue type.
+        2. YOLO detection confidence (0.65) is selected over classifier (0.92).
+        3. Localized bounding boxes are fully preserved.
+        4. is_real_yolo is True.
+        5. Classification is recorded as secondary scene context with bounding_box: None.
+        6. Issue creation persists the primary YOLO defect and bounding boxes.
+        """
+        from typing import List, Dict, Any
+        from app.services.models.registry import model_registry
+        from app.services.models.base_adapter import BaseDefectModelAdapter
+
+        class MockYOLODetector(BaseDefectModelAdapter):
+            @property
+            def model_id(self) -> str:
+                return "yolov8-rdd2020-india-v1"
+
+            @property
+            def supported_categories(self) -> List[str]:
+                return ["Pothole", "Longitudinal Crack", "Transverse Crack", "Alligator Crack"]
+
+            @property
+            def is_available(self) -> bool:
+                return True
+
+            def infer(self, image_path: str) -> Dict[str, Any]:
+                return {
+                    "status": "success",
+                    "model_id": self.model_id,
+                    "raw_detections": [
+                        {
+                            "class": "Pothole",
+                            "raw_class": "D40",
+                            "confidence": 0.65,
+                            "bounding_box": [30, 40, 150, 160]
+                        }
+                    ],
+                    "execution_time_ms": 14.0,
+                    "error_message": None
+                }
+
+        class MockSceneClassifier(BaseDefectModelAdapter):
+            @property
+            def model_id(self) -> str:
+                return "irdid-classifier-candidate"
+
+            @property
+            def supported_categories(self) -> List[str]:
+                return ["Damaged Road Surface", "Waterlogging"]
+
+            @property
+            def is_available(self) -> bool:
+                return True
+
+            def infer(self, image_path: str) -> Dict[str, Any]:
+                return {
+                    "status": "success",
+                    "model_id": self.model_id,
+                    "raw_detections": [
+                        {
+                            "class": "Damaged Road Surface",
+                            "raw_class": "broken_edges",
+                            "confidence": 0.92,
+                            "bounding_box": None
+                        }
+                    ],
+                    "execution_time_ms": 10.0,
+                    "error_message": None
+                }
+
+        mock_yolo = MockYOLODetector()
+        mock_cls = MockSceneClassifier()
+        orig_adapters = dict(model_registry._adapters)
+
+        try:
+            model_registry._adapters = {
+                mock_yolo.model_id: mock_yolo,
+                mock_cls.model_id: mock_cls
+            }
+
+            test_img = os.path.join(self.temp_dir, "test_dual_model_arbitration.jpg")
+            Image.new("RGB", (640, 480), color="gray").save(test_img)
+
+            result = analyze_issue_image(test_img)
+            self.assertEqual(result["status"], "success")
+
+            # Core arbitration check: YOLO Pothole (0.65) MUST win over Classifier Damaged Road Surface (0.92)
+            self.assertEqual(result["issue_type"], "Pothole")
+            self.assertAlmostEqual(result["confidence"], 0.65, places=2)
+            self.assertTrue(result["is_real_yolo"])
+            self.assertEqual(result["recommended_department_code"], "DEPT_PWD")
+
+            # Spatial details: exactly 1 localized bounding box
+            self.assertEqual(len(result["bounding_boxes"]), 1)
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(result["bounding_boxes"][0]["class"], "Pothole")
+            self.assertGreater(result["defect_area_ratio"], 0.0)
+
+            # Secondary context: both defects recorded in detected_defects
+            categories = [d["category"] for d in result["detected_defects"]]
+            self.assertIn("Pothole", categories)
+            self.assertIn("Damaged Road Surface", categories)
+            pothole_entry = next(d for d in result["detected_defects"] if d["category"] == "Pothole")
+            self.assertEqual(pothole_entry["bounding_box"], [30, 40, 120, 120])
+            cls_entry = next(d for d in result["detected_defects"] if d["category"] == "Damaged Road Surface")
+            self.assertIsNone(cls_entry["bounding_box"])
+
+            # Verify issue submission persistence
+            payload = {
+                "title": "Dual-Model Arbitration Verified Pothole",
+                "description": "Arbitration test report",
+                "issue_type": result["issue_type"],
+                "latitude": 13.0870,
+                "longitude": 80.2750,
+                "address": "Arbitration Boulevard",
+                "original_image_url": "/uploads/original/test_dual_model_arbitration.jpg",
+                "ai_confidence": result["confidence"],
+                "severity": result["severity"],
+                "priority_score": result["priority_score"],
+                "bounding_box_json": json.dumps(result["bounding_boxes"]),
+                "detected_defects_json": json.dumps(result["detected_defects"]),
+                "model_provenance_json": json.dumps(result["model_provenance"]),
+                "ai_analysis_status": "SUCCESS"
+            }
+            res_post = self.client.post("/api/v1/issues", json=payload, headers=self.citizen_headers)
+            self.assertEqual(res_post.status_code, 200)
+            data = res_post.json()
+            self.assertEqual(data["status"], "AI_ANALYZED")
+            self.assertEqual(data["issue_type"], "Pothole")
+            self.assertEqual(data["department"]["code"], "DEPT_PWD")
+            # Bounding boxes preserved in image record
+            self.assertNotEqual(data["images"][0]["bounding_box_json"], "[]")
+        finally:
+            model_registry._adapters = orig_adapters
+
 if __name__ == "__main__":
     unittest.main()

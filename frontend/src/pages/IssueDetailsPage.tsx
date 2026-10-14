@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { StatusBadge } from '../components/common/StatusBadge';
-import { MapPin, Cpu, Clock, Building, Shield, CheckCircle2, ArrowLeft, Send, AlertOctagon, Copy } from 'lucide-react';
+import { MapPin, Cpu, Clock, Building, Shield, CheckCircle2, ArrowLeft, Send, AlertOctagon, Copy, CheckCheck, AlertTriangle, XCircle, AlertCircle, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const STATUS_STEPS = [
@@ -26,6 +26,7 @@ export const IssueDetailsPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [selectedDeptId, setSelectedDeptId] = useState<number>(0);
   const [verifiedCategory, setVerifiedCategory] = useState<string>('');
+  const [triageAction, setTriageAction] = useState<'CONFIRM' | 'CORRECT' | 'REJECT_SUGGESTION' | 'REQUEST_INFO'>('CONFIRM');
   const [updating, setUpdating] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -37,8 +38,11 @@ export const IssueDetailsPage: React.FC = () => {
       setIssue(data);
       setNewStatus(data.status);
       if (data.department_id) setSelectedDeptId(data.department_id);
-      if (data.verified_category) setVerifiedCategory(data.verified_category);
-      else setVerifiedCategory(data.issue_type);
+      if (data.verified_category && data.verified_category !== 'REJECTED_AS_FALSE_POSITIVE') {
+        setVerifiedCategory(data.verified_category);
+      } else {
+        setVerifiedCategory(data.issue_type);
+      }
     } catch {
       setError('Failed to load issue details.');
     } finally {
@@ -50,6 +54,33 @@ export const IssueDetailsPage: React.FC = () => {
     fetchIssue();
     departmentService.listDepartments().then(setDepartments).catch(console.error);
   }, [id]);
+
+  const handleTriageDecision = async () => {
+    if (!issue) return;
+    setUpdating(true);
+    setActionFeedback(null);
+    try {
+      await issueService.triageIssue(
+        issue.id,
+        triageAction,
+        triageAction === 'CORRECT' ? verifiedCategory : (triageAction === 'CONFIRM' ? (verifiedCategory || issue.issue_type) : undefined),
+        notes
+      );
+      setNotes('');
+      await fetchIssue(true);
+      const messages: Record<string, string> = {
+        CONFIRM: `AI prediction confirmed as '${verifiedCategory || issue.issue_type}'.`,
+        CORRECT: `Defect reclassified to '${verifiedCategory}'.`,
+        REJECT_SUGGESTION: 'AI suggestion marked as false positive. Citizen complaint preserved for manual review.',
+        REQUEST_INFO: 'Additional information requested from citizen.',
+      };
+      setActionFeedback({ type: 'success', message: messages[triageAction] || 'Triage decision recorded.' });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.response?.data?.detail || 'Failed to submit triage decision.' });
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const handleVerifyCategory = async () => {
     if (!issue || !verifiedCategory) return;
@@ -66,6 +97,7 @@ export const IssueDetailsPage: React.FC = () => {
       setUpdating(false);
     }
   };
+
 
   const handleUpdateStatus = async () => {
     if (!issue) return;
@@ -138,6 +170,27 @@ export const IssueDetailsPage: React.FC = () => {
               <span className="text-[11px] font-mono text-cyan-400/80 uppercase">{issue.issue_type}</span>
               <PriorityBadge score={issue.priority_score} severity={issue.severity} />
               <StatusBadge status={issue.status} />
+
+              {/* Phase 4 Verification Badge */}
+              {issue.is_verified ? (
+                issue.verification_status === 'CONFIRMED' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <CheckCheck className="w-3 h-3" /> Human Verified: {issue.verified_category}
+                  </span>
+                ) : issue.verification_status === 'CORRECTED' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                    <CheckCheck className="w-3 h-3" /> Reclassified: {issue.verified_category}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    <XCircle className="w-3 h-3" /> Suggestion Rejected
+                  </span>
+                )
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                  <AlertTriangle className="w-3 h-3" /> AI Suggestion (Unverified)
+                </span>
+              )}
             </div>
             <h1 className="text-xl lg:text-2xl font-bold text-white">{issue.title}</h1>
             <p className="text-sm text-slate-400 flex items-center gap-1.5 mt-1">
@@ -186,6 +239,16 @@ export const IssueDetailsPage: React.FC = () => {
               <Cpu className="w-4 h-4 text-cyan-400" /> AI Object Detection Analysis
             </h3>
 
+            {/* Whole-image classification notice (no spatial localization) */}
+            {(issue.issue_type === 'Damaged Road Surface' || issue.issue_type === 'Waterlogging') && (
+              <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-xs text-cyan-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-cyan-400" />
+                <div>
+                  <span className="font-semibold">Whole-Image Scene Classification:</span> Prediction represents whole-image context without bounding-box defect localization or measured defect area.
+                </div>
+              </div>
+            )}
+
             {mainImage && (
               <div className="space-y-4">
                 <div className="relative rounded-xl overflow-hidden border border-civic-border">
@@ -195,7 +258,7 @@ export const IssueDetailsPage: React.FC = () => {
                     className="w-full h-72 object-cover"
                   />
                   <div className="absolute top-3 left-3 bg-civic-bg/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-xs font-mono text-cyan-300 border border-cyan-500/20">
-                    Confidence: {(issue.ai_confidence * 100).toFixed(1)}%
+                    Confidence: {(issue.ai_confidence * 100).toFixed(1)}% (Suggestion)
                   </div>
                   {mainImage.annotated_image_path && (
                     <div className="absolute bottom-3 left-3 bg-civic-bg/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[10px] font-mono text-emerald-400 border border-emerald-500/20">
@@ -218,14 +281,32 @@ export const IssueDetailsPage: React.FC = () => {
                 </div>
 
                 {/* Verified Category Status */}
-                {issue.verified_category && (
-                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Municipal Verified Category:</span>
-                    <span className="font-semibold text-purple-300 font-mono">{issue.verified_category}</span>
+                {issue.is_verified ? (
+                  issue.verification_status === 'CONFIRMED' ? (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Municipal Verified Category:</span>
+                      <span className="font-semibold text-emerald-300 font-mono">✓ {issue.verified_category} (Confirmed)</span>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Municipal Reclassified Category:</span>
+                      <span className="font-semibold text-purple-300 font-mono">✎ {issue.verified_category}</span>
+                    </div>
+                  )
+                ) : issue.verified_category === 'REJECTED_AS_FALSE_POSITIVE' ? (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">AI Suggestion Status:</span>
+                    <span className="font-semibold text-rose-300 font-mono">✕ Rejected as False Positive</span>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Verification Status:</span>
+                    <span className="font-semibold text-amber-300 font-mono">⚡ Pending Human Verification</span>
                   </div>
                 )}
               </div>
             )}
+
 
             {/* Location Info */}
             <div className="grid grid-cols-2 gap-3">

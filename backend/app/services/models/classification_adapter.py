@@ -20,11 +20,12 @@ class IRDIDClassificationAdapter(BaseDefectModelAdapter):
         "Waterlogging": "Waterlogging",
     }
 
-    def __init__(self, weights_path: Optional[Path] = None):
+    def __init__(self, weights_path: Optional[Path] = None, enabled: Optional[bool] = None):
         if weights_path is not None:
             self._weights_path = Path(weights_path)
         else:
             self._weights_path = Path(__file__).resolve().parent.parent / "weights" / "irdid_classifier.pt"
+        self._enabled_override = enabled
         self._model = None
         self._load_error = None
         self._is_loaded = False
@@ -38,7 +39,20 @@ class IRDIDClassificationAdapter(BaseDefectModelAdapter):
         return ["Damaged Road Surface", "Waterlogging"]
 
     @property
+    def is_enabled(self) -> bool:
+        if self._enabled_override is not None:
+            return bool(self._enabled_override)
+        try:
+            from app.core.config import settings
+            return bool(getattr(settings, "ENABLE_IRDID_CLASSIFIER", False))
+        except Exception:
+            return False
+
+    @property
     def is_available(self) -> bool:
+        # Gated by both explicit feature flag and runtime weight presence
+        if not self.is_enabled:
+            return False
         if not self._weights_path or not self._weights_path.exists():
             return False
         if not self._is_loaded and not self._load_error:
@@ -46,6 +60,9 @@ class IRDIDClassificationAdapter(BaseDefectModelAdapter):
         return self._is_loaded
 
     def _lazy_load(self):
+        if not self.is_enabled:
+            self._load_error = "IRDID classifier is disabled by configuration (ENABLE_IRDID_CLASSIFIER=False)"
+            return
         if not self._weights_path or not self._weights_path.exists():
             self._load_error = f"Classification weights not found at {self._weights_path}"
             return
@@ -58,12 +75,22 @@ class IRDIDClassificationAdapter(BaseDefectModelAdapter):
 
     def infer(self, image_path: str) -> Dict[str, Any]:
         if not self.is_available:
+            if not self.is_enabled:
+                err_msg = (
+                    f"IRDID classifier is disabled by configuration (ENABLE_IRDID_CLASSIFIER=False). "
+                    f"Weights at {self._weights_path} not active or not found."
+                )
+            else:
+                err_msg = (
+                    f"IRDID classifier weights not found at {self._weights_path}. "
+                    f"Candidate model is pending manual training on curated IRDID dataset."
+                )
             return {
                 "status": "unsupported",
                 "model_id": self.model_id,
                 "raw_detections": [],
                 "execution_time_ms": 0.0,
-                "error_message": f"IRDID classifier weights not found at {self._weights_path}. Candidate model is pending manual training on curated IRDID dataset."
+                "error_message": err_msg
             }
 
         start_time = time.time()

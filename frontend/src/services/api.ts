@@ -116,7 +116,12 @@ export const issueService = {
     const res = await api.patch<Issue>(`/issues/${id}/verify-category`, { verified_category, notes });
     return res.data;
   },
+  triageIssue: async (id: number, decision: string, verified_category?: string, notes?: string) => {
+    const res = await api.post<Issue>(`/issues/${id}/triage`, { decision, verified_category, notes });
+    return res.data;
+  },
 };
+
 
 export const departmentService = {
   listDepartments: async () => {

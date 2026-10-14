@@ -310,8 +310,24 @@ export interface Issue {
   model_provenance_json?: string | null;
   verified_category?: string | null;
   ai_analysis_status?: string | null;
+  is_verified?: boolean;
+  verification_status?: 'UNVERIFIED' | 'CONFIRMED' | 'CORRECTED' | 'REJECTED';
+  ai_suggested_category?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export enum ReviewDecision {
+  CONFIRM = 'CONFIRM',
+  CORRECT = 'CORRECT',
+  REJECT_SUGGESTION = 'REJECT_SUGGESTION',
+  REQUEST_INFO = 'REQUEST_INFO',
+}
+
+export interface TriageReviewPayload {
+  decision: ReviewDecision;
+  verified_category?: string;
+  notes?: string;
 }
 
 export interface MapPoint {

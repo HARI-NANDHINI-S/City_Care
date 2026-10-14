@@ -100,7 +100,7 @@ class TestIRDIDClassificationAdapterSmoke(unittest.TestCase):
         - Maps raw_class 'broken_edges' to standard category 'Damaged Road Surface'.
         - Confirms bounding_box is None (strict check: NO synthetic/fabricated bounding boxes).
         """
-        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path))
+        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path), enabled=True)
 
         # Build mock YOLO classification result object
         mock_probs = MagicMock()
@@ -154,7 +154,7 @@ class TestIRDIDClassificationAdapterSmoke(unittest.TestCase):
         - Maps raw_class 'waterlogged_roads' to standard category 'Waterlogging'.
         - Confirms bounding_box is None.
         """
-        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path))
+        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path), enabled=True)
 
         mock_probs = MagicMock()
         mock_probs.top1 = 1
@@ -188,7 +188,7 @@ class TestIRDIDClassificationAdapterSmoke(unittest.TestCase):
         The adapter must return status='success' with raw_detections=[] because
         the candidate classifier is only authorized for Damaged Road Surface and Waterlogging.
         """
-        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path))
+        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path), enabled=True)
 
         unsupported_classes = ["potholes", "cracks", "open_manholes", "construction_zones", "other_class"]
 
@@ -219,7 +219,7 @@ class TestIRDIDClassificationAdapterSmoke(unittest.TestCase):
         Verify that unexpected inference exceptions are trapped and returned
         with status='error' and error_message populated, without crashing the process.
         """
-        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path))
+        adapter = IRDIDClassificationAdapter(weights_path=Path(self.test_image_path), enabled=True)
 
         mock_faulty_model = MagicMock(side_effect=RuntimeError("Simulated inference engine fault"))
         adapter._model = mock_faulty_model
@@ -232,6 +232,142 @@ class TestIRDIDClassificationAdapterSmoke(unittest.TestCase):
         self.assertEqual(result["raw_detections"], [])
         self.assertIn("Simulated inference engine fault", result["error_message"])
         self.assertGreaterEqual(result["execution_time_ms"], 0.0)
+
+    # -------------------------------------------------------------
+    # PHASE 1: FEATURE FLAG & AVAILABILITY GATING REGRESSION TESTS
+    # -------------------------------------------------------------
+
+    def test_07_feature_flag_defaults_to_disabled(self):
+        """
+        Requirement 1: Verify the feature flag defaults to False in settings.
+        Adapter default instantiation must report is_enabled=False and is_available=False.
+        """
+        from app.core.config import settings
+        self.assertFalse(settings.ENABLE_IRDID_CLASSIFIER, "Default ENABLE_IRDID_CLASSIFIER must be False")
+
+        adapter = IRDIDClassificationAdapter()
+        self.assertFalse(adapter.is_enabled, "Adapter must be disabled by default")
+        self.assertFalse(adapter.is_available, "Adapter must be unavailable by default")
+
+    def test_08_feature_flag_explicit_false_adapter_unavailable(self):
+        """
+        Requirement 2: When feature flag is explicitly False, adapter must report unavailable.
+        """
+        adapter = IRDIDClassificationAdapter(enabled=False)
+        self.assertFalse(adapter.is_enabled)
+        self.assertFalse(adapter.is_available)
+
+        res = adapter.infer(self.test_image_path)
+        self.assertEqual(res["status"], "unsupported")
+        self.assertEqual(res["raw_detections"], [])
+        self.assertIn("disabled by configuration", res["error_message"])
+
+    def test_09_feature_flag_false_with_dummy_checkpoint_remains_unavailable(self):
+        """
+        Requirement 3: The classifier must NOT become available merely because
+        a checkpoint file exists on disk. With flag=False and real file present,
+        availability must remain False.
+        """
+        dummy_weights = Path(self.temp_dir) / "dummy_weights_file.pt"
+        dummy_weights.write_bytes(b"dummy binary checkpoint data")
+        self.assertTrue(dummy_weights.exists())
+
+        # Gated test: weights exist, but enabled=False (or default)
+        adapter = IRDIDClassificationAdapter(weights_path=dummy_weights, enabled=False)
+        self.assertFalse(
+            adapter.is_available,
+            "CRITICAL HAZARD: Adapter became available merely because weights file exists!"
+        )
+
+        res = adapter.infer(self.test_image_path)
+        self.assertEqual(res["status"], "unsupported")
+        self.assertEqual(res["raw_detections"], [])
+
+    def test_10_feature_flag_true_with_no_checkpoint_remains_unavailable(self):
+        """
+        Requirement 4a: When feature flag is True, but weights file is missing,
+        adapter must safely report unavailable.
+        """
+        non_existent = Path(self.temp_dir) / "non_existent_model_weights.pt"
+        self.assertFalse(non_existent.exists())
+
+        adapter = IRDIDClassificationAdapter(weights_path=non_existent, enabled=True)
+        self.assertTrue(adapter.is_enabled)
+        self.assertFalse(adapter.is_available, "Must remain unavailable when weights are absent")
+
+        res = adapter.infer(self.test_image_path)
+        self.assertEqual(res["status"], "unsupported")
+        self.assertIn("not found", res["error_message"])
+
+    def test_11_feature_flag_true_with_valid_test_checkpoint_contract(self):
+        """
+        Requirement 4b & 5: When feature flag is True AND test checkpoint exists,
+        adapter availability follows the model loading contract without production weights.
+        """
+        dummy_weights = Path(self.temp_dir) / "test_contract_weights.pt"
+        dummy_weights.write_bytes(b"mock weights")
+
+        adapter = IRDIDClassificationAdapter(weights_path=dummy_weights, enabled=True)
+        self.assertTrue(adapter.is_enabled)
+
+        # Mock successful model load in isolation
+        adapter._model = MagicMock()
+        adapter._is_loaded = True
+        self.assertTrue(adapter.is_available)
+
+    def test_12_malformed_config_values_fail_safely(self):
+        """
+        Requirement 6: Malformed, non-boolean, or invalid configuration values
+        must fail safely to False without crashing settings instantiation.
+        """
+        from app.core.config import Settings
+
+        # Valid truthy inputs
+        s_true = Settings(ENABLE_IRDID_CLASSIFIER="true")
+        self.assertTrue(s_true.ENABLE_IRDID_CLASSIFIER)
+        s_yes = Settings(ENABLE_IRDID_CLASSIFIER="yes")
+        self.assertTrue(s_yes.ENABLE_IRDID_CLASSIFIER)
+        s_1 = Settings(ENABLE_IRDID_CLASSIFIER="1")
+        self.assertTrue(s_1.ENABLE_IRDID_CLASSIFIER)
+
+        # Valid falsy inputs
+        s_false = Settings(ENABLE_IRDID_CLASSIFIER="false")
+        self.assertFalse(s_false.ENABLE_IRDID_CLASSIFIER)
+        s_no = Settings(ENABLE_IRDID_CLASSIFIER="no")
+        self.assertFalse(s_no.ENABLE_IRDID_CLASSIFIER)
+        s_0 = Settings(ENABLE_IRDID_CLASSIFIER="0")
+        self.assertFalse(s_0.ENABLE_IRDID_CLASSIFIER)
+
+        # Malformed / invalid inputs -> must fail-safe to False
+        s_malformed1 = Settings(ENABLE_IRDID_CLASSIFIER="random_invalid_string")
+        self.assertFalse(s_malformed1.ENABLE_IRDID_CLASSIFIER)
+
+        s_malformed2 = Settings(ENABLE_IRDID_CLASSIFIER="enabled_maybe")
+        self.assertFalse(s_malformed2.ENABLE_IRDID_CLASSIFIER)
+
+    def test_13_classifier_disabled_preserves_registry_and_yolo_behavior(self):
+        """
+        Requirement 7 & 8: Verify model registry and existing YOLO behavior
+        when IRDID classifier is disabled by default:
+        - IRDID adapter is registered but unavailable.
+        - Active adapters list contains YOLO and excludes IRDID classifier.
+        """
+        from app.services.models.registry import model_registry
+
+        # Check adapter in registry
+        candidate_adapter = model_registry.get_adapter("irdid-classifier-candidate")
+        self.assertIsNotNone(candidate_adapter)
+        self.assertFalse(candidate_adapter.is_available)
+
+        # Active adapters list must NOT contain the candidate classifier
+        active_ids = [a.model_id for a in model_registry.get_all_active_adapters()]
+        self.assertNotIn("irdid-classifier-candidate", active_ids)
+
+        # Active YOLO adapter must remain intact
+        yolo_adapter = model_registry.get_adapter("yolov8-rdd2020-india-v1")
+        self.assertIsNotNone(yolo_adapter)
+        self.assertTrue(yolo_adapter.is_available)
+        self.assertIn("yolov8-rdd2020-india-v1", active_ids)
 
 
 if __name__ == "__main__":

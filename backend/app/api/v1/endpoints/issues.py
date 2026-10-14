@@ -263,21 +263,103 @@ def verify_category(issue_id: int, payload: VerifyCategorySchema, db: Session = 
     issue = q_issue(db, issue_id)
     assert_department_access(issue, current_user)
     
+    reviewer_name = current_user.full_name or f"User #{current_user.id}"
+    advances_to_review = issue.status in (IssueStatus.AI_ANALYZED, IssueStatus.REPORTED)
+    target_status = IssueStatus.UNDER_REVIEW if advances_to_review else issue.status
+
+    if payload.verified_category == "REJECTED_AS_FALSE_POSITIVE":
+        issue.verified_category = "REJECTED_AS_FALSE_POSITIVE"
+        issue.ai_analysis_status = "AI_SUGGESTION_REJECTED"
+        note = f"AI suggestion REJECTED as false positive by reviewer ({reviewer_name}): {payload.notes or 'Rejected during triage'}. Citizen complaint preserved for manual review."
+        issue.latest_update = note
+        history(db, issue, current_user, target_status, note, issue.progress_percentage)
+        db.commit()
+        return q_issue(db, issue.id)
+
     from app.core.defect_registry import DEFECT_REGISTRY
     if payload.verified_category not in DEFECT_REGISTRY:
         raise HTTPException(400, f"Invalid category '{payload.verified_category}'. Must be a recognized defect category.")
 
-    old_cat = issue.verified_category or issue.issue_type.value
+    old_cat = issue.verified_category or (issue.issue_type.value if hasattr(issue.issue_type, 'value') else str(issue.issue_type))
     issue.verified_category = payload.verified_category
     note = f"Category reviewed and updated: from '{old_cat}' to '{payload.verified_category}'. {payload.notes or ''}".strip()
     issue.latest_update = note
-    db.add(IssueStatusHistory(
-        issue_id=issue.id,
-        previous_status=issue.status,
-        new_status=issue.status,
-        changed_by_user_id=current_user.id,
-        notes=note,
-        progress_percentage=issue.progress_percentage
-    ))
+    history(db, issue, current_user, target_status, note, issue.progress_percentage)
     db.commit()
     return q_issue(db, issue.id)
+
+@router.post('/{issue_id}/triage', response_model=IssueDetailOut)
+def triage_issue(
+    issue_id: int,
+    payload: TriageReviewSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Phase 4 Human Verification and Safe Triage:
+    Auditable workflow where AI predictions remain suggestions until an authorized
+    municipal reviewer (Admin or Department Officer) records a triage decision.
+    
+    Supported Outcomes:
+    - CONFIRM: Validates that the AI-suggested defect matches reality.
+    - CORRECT: Reclassifies defect to a different valid category while preserving original AI/citizen data.
+    - REJECT_SUGGESTION: Rejects the AI prediction as false positive/invalid without deleting the citizen report.
+    - REQUEST_INFO: Requests additional evidence/clarification from citizen while keeping report under review.
+    """
+    issue = q_issue(db, issue_id)
+    assert_department_access(issue, current_user)
+
+    from app.core.defect_registry import DEFECT_REGISTRY
+
+    advances_to_review = issue.status in (IssueStatus.AI_ANALYZED, IssueStatus.REPORTED)
+    target_status = IssueStatus.UNDER_REVIEW if advances_to_review else issue.status
+    reviewer_name = current_user.full_name or f"User #{current_user.id}"
+
+    if payload.decision == ReviewDecision.CONFIRM:
+        confirmed_cat = payload.verified_category or (issue.issue_type.value if hasattr(issue.issue_type, 'value') else str(issue.issue_type))
+        if confirmed_cat not in DEFECT_REGISTRY:
+            raise HTTPException(400, f"Cannot confirm invalid category '{confirmed_cat}'. Must be a recognized defect category.")
+        
+        issue.verified_category = confirmed_cat
+        note = f"AI suggestion CONFIRMED by reviewer ({reviewer_name}): '{confirmed_cat}'. {payload.notes or ''}".strip()
+        issue.latest_update = note
+        history(db, issue, current_user, target_status, note, issue.progress_percentage)
+
+    elif payload.decision == ReviewDecision.CORRECT:
+        if not payload.verified_category:
+            raise HTTPException(400, "verified_category is required when correcting/reclassifying a defect.")
+        if payload.verified_category not in DEFECT_REGISTRY:
+            raise HTTPException(400, f"Cannot reclassify to invalid category '{payload.verified_category}'.")
+        
+        orig_cat = issue.issue_type.value if hasattr(issue.issue_type, 'value') else str(issue.issue_type)
+        issue.verified_category = payload.verified_category
+        # Note: issue.issue_type and detected_defects_json are preserved intact!
+        note = f"AI suggestion CORRECTED by reviewer ({reviewer_name}): reclassified from '{orig_cat}' to '{payload.verified_category}'. {payload.notes or ''}".strip()
+        issue.latest_update = note
+        history(db, issue, current_user, target_status, note, issue.progress_percentage)
+
+    elif payload.decision == ReviewDecision.REJECT_SUGGESTION:
+        if not payload.notes or len(payload.notes.strip()) < 3:
+            raise HTTPException(400, "A reason/note is required when rejecting an AI suggestion.")
+        
+        issue.verified_category = "REJECTED_AS_FALSE_POSITIVE"
+        issue.ai_analysis_status = "AI_SUGGESTION_REJECTED"
+        # Safety constraint: Do NOT delete report or erase citizen complaint; keep under review for manual handling
+        note = f"AI suggestion REJECTED as false positive by reviewer ({reviewer_name}): {payload.notes.strip()}. Citizen complaint preserved for manual review."
+        issue.latest_update = note
+        history(db, issue, current_user, target_status, note, issue.progress_percentage)
+
+    elif payload.decision == ReviewDecision.REQUEST_INFO:
+        if not payload.notes or len(payload.notes.strip()) < 3:
+            raise HTTPException(400, "Please specify what additional information is needed from the citizen.")
+        
+        note = f"Additional information requested by reviewer ({reviewer_name}): {payload.notes.strip()}"
+        issue.latest_update = note
+        history(db, issue, current_user, target_status, note, issue.progress_percentage)
+
+    else:
+        raise HTTPException(400, f"Unsupported triage decision '{payload.decision}'.")
+
+    db.commit()
+    return q_issue(db, issue.id)
+

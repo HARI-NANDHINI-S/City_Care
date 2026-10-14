@@ -1,7 +1,19 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import enum
 from app.models.issue import IssueStatus, IssueType, SeverityLevel
+
+class ReviewDecision(str, enum.Enum):
+    CONFIRM = "CONFIRM"
+    CORRECT = "CORRECT"
+    REJECT_SUGGESTION = "REJECT_SUGGESTION"
+    REQUEST_INFO = "REQUEST_INFO"
+
+class TriageReviewSchema(BaseModel):
+    decision: ReviewDecision
+    verified_category: Optional[str] = None
+    notes: Optional[str] = None
 
 class UserSimple(BaseModel):
     id: int
@@ -65,6 +77,11 @@ class IssueDetailOut(BaseModel):
     verified_category: Optional[str] = None
     ai_analysis_status: Optional[str] = None
 
+    # Phase 4 Human Verification & Safe Triage fields
+    is_verified: bool = False
+    verification_status: Optional[str] = "UNVERIFIED"
+    ai_suggested_category: Optional[str] = None
+
     reporter: Optional[UserSimple] = None
     department: Optional[DepartmentSimple] = None
     assigned_officer: Optional[UserSimple] = None
@@ -73,6 +90,7 @@ class IssueDetailOut(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class DashboardStats(BaseModel):
     total_issues: int

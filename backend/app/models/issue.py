@@ -82,3 +82,34 @@ class Issue(Base):
     images = relationship("IssueImage", back_populates="issue", cascade="all, delete-orphan")
     status_history = relationship("IssueStatusHistory", back_populates="issue", cascade="all, delete-orphan")
     duplicate_relations = relationship("DuplicateIssueRelation", foreign_keys="[DuplicateIssueRelation.original_issue_id]", back_populates="original_issue", cascade="all, delete-orphan")
+
+    @property
+    def is_verified(self) -> bool:
+        """True only if an authorized human reviewer has confirmed or corrected the defect category."""
+        return bool(self.verified_category and self.verified_category != "REJECTED_AS_FALSE_POSITIVE")
+
+    @property
+    def verification_status(self) -> str:
+        """
+        Human triage verification state:
+        - UNVERIFIED: Prediction remains an unconfirmed suggestion.
+        - CONFIRMED: Reviewer validated that the suggested defect matches reality.
+        - CORRECTED: Reviewer reclassified the defect to a different active category.
+        - REJECTED: Reviewer determined the suggestion is a false positive / invalid.
+        """
+        if not self.verified_category:
+            return "UNVERIFIED"
+        if self.verified_category == "REJECTED_AS_FALSE_POSITIVE":
+            return "REJECTED"
+        expected = self.issue_type.value if hasattr(self.issue_type, 'value') else str(self.issue_type)
+        if self.verified_category == expected:
+            return "CONFIRMED"
+        return "CORRECTED"
+
+    @property
+    def ai_suggested_category(self) -> str:
+        """Original AI or reported category suggested prior to human verification."""
+        if (self.ai_confidence or 0) > 0 or self.ai_analysis_status == "SUCCESS":
+            return self.issue_type.value if hasattr(self.issue_type, 'value') else str(self.issue_type)
+        return None
+
