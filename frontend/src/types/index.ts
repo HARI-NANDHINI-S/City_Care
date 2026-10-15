@@ -24,7 +24,7 @@ export type CapabilityCategoryType =
 
 export interface DefectCategoryMeta {
   name: string;
-  domain: 'Road' | 'Sanitation' | 'Drainage';
+  domain: 'Road' | 'Sanitation' | 'Drainage' | 'Utility';
   capability: ModelReadinessStatus;
   capabilityLabel: string;
   capabilityCategory: CapabilityCategoryType;
@@ -156,6 +156,40 @@ export const ACTIVE_12_CATEGORIES: DefectCategoryMeta[] = [
     isModelAvailable: false,
     modelType: 'pending',
     description: 'Broken, collapsed, or displaced stormwater drain slabs/culvert grates. Distinct from sewer manholes.'
+  },
+];
+
+export const ALL_15_CATEGORIES: DefectCategoryMeta[] = [
+  ...ACTIVE_12_CATEGORIES,
+  {
+    name: 'Road Damage',
+    domain: 'Road',
+    capability: ModelReadinessStatus.MANUAL_REPORTING_ONLY,
+    capabilityLabel: 'Manual reporting only (legacy umbrella)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
+    modelType: 'pending',
+    description: 'General road surface degradation and legacy defect reporting.'
+  },
+  {
+    name: 'Open Manhole',
+    domain: 'Utility',
+    capability: ModelReadinessStatus.MANUAL_REPORTING_ONLY,
+    capabilityLabel: 'Manual reporting only (utility safety)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
+    modelType: 'pending',
+    description: 'Exposed underground sewer shaft opening (dispatched to Sewerage & Sanitation Board).'
+  },
+  {
+    name: 'Broken Streetlight',
+    domain: 'Utility',
+    capability: ModelReadinessStatus.MANUAL_REPORTING_ONLY,
+    capabilityLabel: 'Manual reporting only (utility safety)',
+    capabilityCategory: 'manual_reporting_only',
+    isModelAvailable: false,
+    modelType: 'pending',
+    description: 'Non-functioning, damaged, or dark streetlight luminaire (dispatched to Electrical Dept).'
   },
 ];
 

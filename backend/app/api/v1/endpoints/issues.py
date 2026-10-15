@@ -235,9 +235,32 @@ def list_issues(
     return q.offset(skip).limit(min(limit, 200)).all()
 
 @router.get('/map-data')
-def map_data(db:Session=Depends(get_db)):
-    issues=db.query(Issue).options(joinedload(Issue.images),joinedload(Issue.department)).all()
-    return [{'id':i.id,'title':i.title,'issue_type':i.issue_type.value,'latitude':i.latitude,'longitude':i.longitude,'address':i.address,'status':i.status.value,'severity':i.severity.value,'priority_score':i.priority_score,'department':i.department.name if i.department else None,'image_url':i.images[0].original_image_path if i.images else None,'created_at':i.created_at} for i in issues]
+def map_data(db: Session = Depends(get_db)):
+    issues = db.query(Issue).options(joinedload(Issue.images), joinedload(Issue.department)).all()
+    results = []
+    for i in issues:
+        if i.latitude is not None and i.longitude is not None:
+            try:
+                lat = float(i.latitude)
+                lng = float(i.longitude)
+                if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
+                    results.append({
+                        'id': i.id,
+                        'title': i.title,
+                        'issue_type': i.issue_type.value if hasattr(i.issue_type, 'value') else str(i.issue_type),
+                        'latitude': lat,
+                        'longitude': lng,
+                        'address': i.address,
+                        'status': i.status.value if hasattr(i.status, 'value') else str(i.status),
+                        'severity': i.severity.value if hasattr(i.severity, 'value') else str(i.severity),
+                        'priority_score': float(i.priority_score or 0.0),
+                        'department': i.department.name if i.department else None,
+                        'image_url': i.images[0].original_image_path if i.images else None,
+                        'created_at': i.created_at
+                    })
+            except (ValueError, TypeError):
+                continue
+    return results
 
 @router.get('/clarifications/pending', response_model=List[IssueDetailOut])
 def pending_clarifications(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

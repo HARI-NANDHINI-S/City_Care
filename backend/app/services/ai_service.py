@@ -202,10 +202,29 @@ def analyze_issue_image(image_path: str) -> Dict[str, Any]:
         best_detection = max(localized_detections, key=lambda x: x["confidence"])
         primary_category = best_detection["class"]
         primary_confidence = best_detection["confidence"]
-    else:
+    elif classification_detections:
         best_detection = max(classification_detections, key=lambda x: x["confidence"])
         primary_category = best_detection["class"]
         primary_confidence = best_detection["confidence"]
+    else:
+        return {
+            "status": "no_detection",
+            "message": "No infrastructure defect detected with sufficient confidence in this image.",
+            "issue_type": None,
+            "confidence": None,
+            "severity": None,
+            "priority_score": None,
+            "recommended_department": None,
+            "recommended_department_code": None,
+            "bounding_boxes": [],
+            "detected_defects": [],
+            "defect_area_ratio": 0.0,
+            "annotated_image_filename": filename,
+            "original_image_filename": filename,
+            "is_real_yolo": True,
+            "count": 0,
+            "model_provenance": model_provenance
+        }
 
     # 7. Build geometry, defect area, and multi-defect details
     total_area = width * height

@@ -1,25 +1,65 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { issueService } from '../services/api';
-import { AIAnalysisResult, ACTIVE_12_CATEGORIES, ModelReadinessStatus } from '../types';
-import { Upload, MapPin, Cpu, AlertCircle, ArrowRight, CheckCircle2, Image as ImageIcon, Crosshair, Map } from 'lucide-react';
+import { AIAnalysisResult, ALL_15_CATEGORIES, IssueType, SeverityLevel } from '../types';
+import { 
+  Upload, MapPin, Cpu, AlertCircle, ArrowRight, CheckCircle2, 
+  Image as ImageIcon, Crosshair, Map, ShieldAlert, Check, X, Info
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const fadeUp = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } };
 
+const DEPARTMENT_LOOKUP: Record<string, string> = {
+  // Road
+  'Pothole': 'Road & Public Works Department (DEPT_PWD)',
+  'Longitudinal Crack': 'Road & Public Works Department (DEPT_PWD)',
+  'Transverse Crack': 'Road & Public Works Department (DEPT_PWD)',
+  'Alligator Crack': 'Road & Public Works Department (DEPT_PWD)',
+  'Damaged Road Surface': 'Road & Public Works Department (DEPT_PWD)',
+  'Road Damage': 'Road & Public Works Department (DEPT_PWD)',
+
+  // Sanitation
+  'Garbage Accumulation': 'Waste Management & Sanitation Dept (DEPT_SAN)',
+  'Illegal Dumping': 'Waste Management & Sanitation Dept (DEPT_SAN)',
+  'Overflowing Garbage Bins': 'Waste Management & Sanitation Dept (DEPT_SAN)',
+
+  // Drainage
+  'Blocked Drains': 'Stormwater Drainage Dept (DEPT_DRAIN)',
+  'Overflowing Drains': 'Stormwater Drainage Dept (DEPT_DRAIN)',
+  'Waterlogging': 'Stormwater Drainage Dept (DEPT_DRAIN)',
+  'Damaged Drainage Covers': 'Stormwater Drainage Dept (DEPT_DRAIN)',
+
+  // Utility
+  'Open Manhole': 'Sewerage & Sanitation Board (DEPT_SEW)',
+  'Broken Streetlight': 'Electrical Infrastructure Dept (DEPT_ELEC)',
+};
+
+const YOLO_SUPPORTED_CLASSES = new Set([
+  'Pothole',
+  'Longitudinal Crack',
+  'Transverse Crack',
+  'Alligator Crack'
+]);
+
 export const ReportIssuePage: React.FC = () => {
   const navigate = useNavigate();
 
+  // 1. Citizen reporting inputs
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [manualSeverity, setManualSeverity] = useState<SeverityLevel>(SeverityLevel.MEDIUM);
   const [latitude, setLatitude] = useState<number>(28.6139);
   const [longitude, setLongitude] = useState<number>(77.2090);
   const [address, setAddress] = useState('Connaught Place Ring Road, Sector 4');
-  
+
+  // 2. AI state
   const [analyzing, setAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
+  const [aiAccepted, setAiAccepted] = useState<boolean>(true); // Whether citizen accepts AI suggestion on disagreement
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,11 +72,8 @@ export const ReportIssuePage: React.FC = () => {
     setSelectedFile(file);
     setImagePreview(URL.createObjectURL(file));
     setError('');
-    setAiResult(null); // Reset AI result if image changes
+    setAiResult(null); // Reset AI result when image changes
   };
-
-  const [manualCategory, setManualCategory] = useState<string>('Pothole');
-  const [manualSeverity, setManualSeverity] = useState<string>('MEDIUM');
 
   const handleFetchLocation = () => {
     if (navigator.geolocation) {
@@ -46,7 +83,7 @@ export const ReportIssuePage: React.FC = () => {
           setLongitude(Number(pos.coords.longitude.toFixed(6)));
           setAddress(`GPS Coordinates (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
         },
-        (err) => {
+        () => {
           setError('Could not retrieve precise location. Please enter manually or allow permissions.');
         }
       );
@@ -64,11 +101,21 @@ export const ReportIssuePage: React.FC = () => {
     try {
       const result = await issueService.analyzeImage(selectedFile);
       setAiResult(result);
+
+      // Auto-suggest title if empty and AI detected a defect
       if (result.issue_type && !title) {
         setTitle(`Reported ${result.issue_type} near ${address.split(',')[0]}`);
       }
+
+      // If user hadn't selected a category yet and AI detected something, set it
+      if (!selectedCategory && result.issue_type) {
+        setSelectedCategory(result.issue_type);
+        setAiAccepted(true);
+      } else if (result.issue_type && selectedCategory) {
+        // If there's an AI result and a selection, default to accepting AI if it matches
+        setAiAccepted(result.issue_type === selectedCategory);
+      }
     } catch (err: any) {
-      // Graceful fallback: set structured vision_unavailable state
       setAiResult({
         status: 'vision_unavailable',
         message: err.response?.data?.detail || 'Automated AI vision model is currently unavailable on this host.',
@@ -87,16 +134,30 @@ export const ReportIssuePage: React.FC = () => {
     }
   };
 
-  const isManualMode = aiResult && (aiResult.status === 'no_detection' || aiResult.status === 'vision_unavailable' || !aiResult.issue_type);
+  // Determine final effective category
+  const hasAiDetection = Boolean(aiResult && aiResult.status === 'success' && aiResult.issue_type);
+  const isCategoryMismatch = hasAiDetection && selectedCategory && aiResult?.issue_type !== selectedCategory;
+  
+  const effectiveCategory = hasAiDetection 
+    ? (aiAccepted ? (aiResult?.issue_type || selectedCategory) : selectedCategory)
+    : selectedCategory;
+
+  const currentCategoryMeta = ALL_15_CATEGORIES.find(c => c.name === (selectedCategory || effectiveCategory));
+  const isAiCapableCategory = selectedCategory ? YOLO_SUPPORTED_CLASSES.has(selectedCategory) : true;
 
   const handleSubmitReport = async () => {
-    if (!selectedFile && !aiResult?.original_image_url) {
-      setError('Please upload an infrastructure image first.');
+    if (!selectedCategory && !effectiveCategory) {
+      setError('Please select an issue category from the 15 supported categories.');
       return;
     }
 
-    const effectiveCategory = isManualMode ? manualCategory : aiResult?.issue_type;
-    if (!effectiveCategory) {
+    if (!selectedFile && !aiResult?.original_image_url) {
+      setError('Please upload an infrastructure photo to accompany your report.');
+      return;
+    }
+
+    const finalCategory = effectiveCategory || selectedCategory;
+    if (!finalCategory) {
       setError('Please select a valid defect category before submitting.');
       return;
     }
@@ -104,23 +165,41 @@ export const ReportIssuePage: React.FC = () => {
     setSubmitting(true);
     setError('');
 
+    // Determine AI analysis status string
+    let analysisStatus = 'MANUAL';
+    if (aiResult) {
+      if (aiResult.status === 'success') {
+        if (isCategoryMismatch) {
+          analysisStatus = aiAccepted ? 'AI_SUGGESTION_ACCEPTED' : 'CITIZEN_OVERRODE_AI';
+        } else {
+          analysisStatus = 'SUCCESS';
+        }
+      } else if (aiResult.status === 'no_detection') {
+        analysisStatus = 'NO_DETECTION';
+      } else {
+        analysisStatus = 'VISION_UNAVAILABLE';
+      }
+    }
+
+    const useAiMetrics = hasAiDetection && aiAccepted;
+
     try {
       const createdIssue = await issueService.createIssue({
-        title: title || `${effectiveCategory} Report`,
+        title: title || `${finalCategory} Report`,
         description,
-        issue_type: effectiveCategory,
+        issue_type: finalCategory as IssueType,
         latitude,
         longitude,
         address,
         original_image_url: aiResult?.original_image_url || imagePreview || '',
-        annotated_image_url: isManualMode ? undefined : aiResult?.annotated_image_url,
-        ai_confidence: isManualMode ? 0 : (aiResult?.confidence || 0),
-        severity: isManualMode ? manualSeverity : (aiResult?.severity || 'MEDIUM'),
-        priority_score: isManualMode ? 50.0 : (aiResult?.priority_score || 0),
-        bounding_box_json: isManualMode ? "[]" : JSON.stringify(aiResult?.bounding_boxes || []),
-        detected_defects_json: isManualMode ? "[]" : JSON.stringify(aiResult?.detected_defects || []),
-        model_provenance_json: isManualMode ? "{}" : JSON.stringify(aiResult?.model_provenance || {}),
-        ai_analysis_status: aiResult?.status || (isManualMode ? 'MANUAL' : 'SUCCESS')
+        annotated_image_url: useAiMetrics ? aiResult?.annotated_image_url : undefined,
+        ai_confidence: useAiMetrics ? (aiResult?.confidence || 0) : 0,
+        severity: useAiMetrics && aiResult?.severity ? aiResult.severity : manualSeverity,
+        priority_score: useAiMetrics && aiResult?.priority_score ? aiResult.priority_score : 50.0,
+        bounding_box_json: useAiMetrics ? JSON.stringify(aiResult?.bounding_boxes || []) : "[]",
+        detected_defects_json: JSON.stringify(aiResult?.detected_defects || []),
+        model_provenance_json: JSON.stringify(aiResult?.model_provenance || {}),
+        ai_analysis_status: analysisStatus
       });
 
       navigate(`/issue/${createdIssue.id}`);
@@ -136,11 +215,11 @@ export const ReportIssuePage: React.FC = () => {
       {/* Header */}
       <motion.div initial="hidden" animate="visible" variants={fadeUp}>
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-mono tracking-wider mb-2">
-          <Cpu className="w-3 h-3" /> AI REPORTING WIZARD
+          <Cpu className="w-3 h-3" /> CIVIC REPORTING WIZARD • 15 MUNICIPAL CATEGORIES
         </div>
-        <h1 className="text-2xl font-bold text-white">Report Civic Defect</h1>
+        <h1 className="text-2xl font-bold text-white">Report Civic Infrastructure Defect</h1>
         <p className="text-sm text-slate-400 mt-0.5 max-w-2xl">
-          Upload an image of the infrastructure issue. Our computer vision models will automatically detect the defect type, classify severity, and route it to the correct department.
+          Select the reporting category, upload a photo, and optionally run YOLOv8 computer vision detection. Municipal officers will triage and verify all reported issues.
         </p>
       </motion.div>
 
@@ -157,13 +236,95 @@ export const ReportIssuePage: React.FC = () => {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
+        {/* Left Column: Category, Upload, Location */}
         <div className="space-y-6">
-          {/* Step 1: Upload */}
+          {/* Step 1: Upfront Category Selection (15 Categories) */}
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 }}
+            className="bg-civic-card border border-civic-border rounded-2xl p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold">1</span>
+              Select Defect Category (15 Categories Supported)
+            </h2>
+
+            <div>
+              <label className="text-[10px] font-mono text-slate-400 uppercase mb-1.5 block">Reporting Category *</label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setError('');
+                }}
+                className="w-full bg-civic-bg border border-civic-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
+              >
+                <option value="">-- Choose Reporting Category (15 Options) --</option>
+                
+                <optgroup label="Road Infrastructure Defects (6)">
+                  <option value="Pothole">Pothole [YOLOv8 Object Detection Supported]</option>
+                  <option value="Longitudinal Crack">Longitudinal Crack [YOLOv8 Object Detection Supported]</option>
+                  <option value="Transverse Crack">Transverse Crack [YOLOv8 Object Detection Supported]</option>
+                  <option value="Alligator Crack">Alligator Crack [YOLOv8 Object Detection Supported]</option>
+                  <option value="Damaged Road Surface">Damaged Road Surface [Manual Citizen Reporting]</option>
+                  <option value="Road Damage">Road Damage [Legacy Umbrella — Manual Reporting]</option>
+                </optgroup>
+
+                <optgroup label="Sanitation & Waste Defects (3)">
+                  <option value="Garbage Accumulation">Garbage Accumulation [Manual Citizen Reporting]</option>
+                  <option value="Illegal Dumping">Illegal Dumping [Manual Citizen Reporting]</option>
+                  <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Manual Citizen Reporting]</option>
+                </optgroup>
+
+                <optgroup label="Drainage & Water Defects (4)">
+                  <option value="Blocked Drains">Blocked Drains [Manual Citizen Reporting]</option>
+                  <option value="Overflowing Drains">Overflowing Drains [Manual Citizen Reporting]</option>
+                  <option value="Waterlogging">Waterlogging [Manual Citizen Reporting]</option>
+                  <option value="Damaged Drainage Covers">Damaged Drainage Covers [Manual Citizen Reporting]</option>
+                </optgroup>
+
+                <optgroup label="Public Utilities & Safety (2)">
+                  <option value="Open Manhole">Open Manhole [Manual Citizen Reporting — Sewerage Board]</option>
+                  <option value="Broken Streetlight">Broken Streetlight [Manual Citizen Reporting — Electrical Dept]</option>
+                </optgroup>
+              </select>
+            </div>
+
+            {/* Dynamic Capability & Department Guidance */}
+            {selectedCategory && (
+              <div className="p-3 rounded-xl bg-slate-900/80 border border-civic-border text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase text-slate-400">Target Department:</span>
+                  <span className="text-[11px] font-semibold text-purple-400 font-mono">
+                    {DEPARTMENT_LOOKUP[selectedCategory] || 'Municipal Dispatch'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase text-slate-400">AI Detection Status:</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
+                    isAiCapableCategory 
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {isAiCapableCategory ? 'YOLOv8 Detection Supported' : 'Manual Citizen Reporting'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-relaxed pt-1">
+                  {currentCategoryMeta?.description || 'Municipal infrastructure issue reported by citizen.'}
+                </p>
+                {!isAiCapableCategory && (
+                  <p className="text-[10px] text-amber-400/90 italic flex items-center gap-1 pt-0.5">
+                    <Info className="w-3 h-3 shrink-0" />
+                    Automated YOLO vision only detects road cracks & potholes. This category uses direct citizen manual dispatch.
+                  </p>
+                )}
+              </div>
+            )}
+          </motion.div>
+
+          {/* Step 2: Upload Image */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
             className="bg-civic-card border border-civic-border rounded-2xl p-6 space-y-4">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-cyan-400" /> 1. Upload Defect Image
+              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold">2</span>
+              Upload Infrastructure Photo
             </h2>
 
             <div
@@ -176,47 +337,48 @@ export const ReportIssuePage: React.FC = () => {
 
               {imagePreview ? (
                 <div className="relative group rounded-xl overflow-hidden bg-slate-900">
-                  <img src={imagePreview} alt="Preview" className="w-full h-64 object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                  <img src={imagePreview} alt="Preview" className="w-full h-56 object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="px-4 py-2 rounded-lg bg-civic-card border border-civic-border text-sm font-medium text-white">Click to change</div>
+                    <div className="px-4 py-2 rounded-lg bg-civic-card border border-civic-border text-sm font-medium text-white">Click to change photo</div>
                   </div>
                 </div>
               ) : (
-                <div className="py-16 flex flex-col items-center justify-center">
+                <div className="py-12 flex flex-col items-center justify-center">
                   <div className="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3">
                     <Upload className="w-6 h-6" />
                   </div>
-                  <div className="text-sm font-semibold text-slate-200">Click or drag image here</div>
-                  <div className="text-[11px] text-slate-500 mt-1">High-resolution JPG/PNG for best AI results</div>
+                  <div className="text-sm font-semibold text-slate-200">Click or drag defect image here</div>
+                  <div className="text-[11px] text-slate-500 mt-1">High-resolution JPG/PNG/WEBP (up to 10MB)</div>
                 </div>
               )}
             </div>
 
             <button
               onClick={handleRunAIAnalysis}
-              disabled={!selectedFile || analyzing || !!aiResult}
+              disabled={!selectedFile || analyzing || (!!aiResult && aiResult.status === 'success')}
               className={`w-full py-3 rounded-xl font-semibold text-sm shadow-lg flex items-center justify-center gap-2 transition-all ${
-                aiResult 
+                aiResult && aiResult.status === 'success'
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-not-allowed'
                   : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20 disabled:opacity-40 disabled:cursor-not-allowed'
               }`}
             >
               {analyzing ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Running YOLOv8 Pipeline...</>
-              ) : aiResult ? (
-                <><CheckCircle2 className="w-4 h-4" /> Analysis Complete</>
+                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Running YOLOv8 Road Pipeline...</>
+              ) : aiResult && aiResult.status === 'success' ? (
+                <><CheckCircle2 className="w-4 h-4" /> AI Analysis Completed</>
               ) : (
-                <><Cpu className="w-4 h-4" /> Run AI Vision Analysis</>
+                <><Cpu className="w-4 h-4" /> Run AI Defect Analysis (Optional)</>
               )}
             </button>
           </motion.div>
 
-          {/* Step 2: Location */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+          {/* Step 3: Location Metadata */}
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
             className="bg-civic-card border border-civic-border rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-emerald-400" /> 2. Location Metadata
+                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold">3</span>
+                Location Metadata
               </h2>
               <button onClick={handleFetchLocation} type="button" className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5">
                 <Crosshair className="w-3 h-3" /> Auto-Locate GPS
@@ -248,221 +410,186 @@ export const ReportIssuePage: React.FC = () => {
           </motion.div>
         </div>
 
-        {/* Right Column */}
+        {/* Right Column: AI Results & Final Submit */}
         <div className="space-y-6">
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
             className="bg-civic-card border border-civic-border rounded-2xl p-6 space-y-5 h-full flex flex-col">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-cyan-400" /> 3. Verification & Submit
+              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold">4</span>
+              Verification & Dispatch Preview
             </h2>
 
-            {!aiResult ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-civic-border rounded-xl">
-                <div className="w-12 h-12 rounded-full bg-slate-800/50 flex items-center justify-center mb-3">
-                  <Cpu className="w-5 h-5 text-slate-600" />
-                </div>
-                <p className="text-sm font-semibold text-slate-400">Waiting for AI Output</p>
-                <p className="text-[11px] text-slate-500 mt-1 max-w-[220px]">Upload an image and run analysis to populate verification data.</p>
-              </div>
-            ) : isManualMode ? (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-5 flex-1 flex flex-col">
-                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
-                  <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-1">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>Citizen Manual Fallback Mode</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    {aiResult.status === 'vision_unavailable' 
-                      ? 'Automated AI vision is temporarily offline on this system. You can manually classify your issue below.' 
-                      : 'AI detected no standard highway defects in this photo. You can specify the civic issue category manually.'}
-                  </p>
-                </div>
+            {/* AI Result Card */}
+            {aiResult && (
+              <div className="space-y-4">
+                {aiResult.status === 'success' && aiResult.issue_type ? (
+                  <div className="bg-civic-bg border border-civic-border rounded-xl p-4 space-y-3">
+                    <div className="text-[10px] font-mono text-slate-500 flex items-center justify-between">
+                      <span>AI_VISION_INFERENCE</span>
+                      <span className="text-emerald-400 flex items-center gap-1 font-mono font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> DETECTED: {aiResult.issue_type}
+                      </span>
+                    </div>
 
-                {/* Manual Category Selection Box */}
-                <div className="bg-civic-bg border border-civic-border rounded-xl p-4 space-y-3">
-                  <div className="text-[10px] font-mono text-slate-500 flex items-center justify-between">
-                    <span>MANUAL_CLASSIFICATION</span>
-                    <span className="text-amber-400 font-mono">CITIZEN_REPORTED</span>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono text-slate-400 uppercase mb-1 block">Defect Category *</label>
-                    <select
-                      value={manualCategory}
-                      onChange={(e) => setManualCategory(e.target.value)}
-                      className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    >
-                      <optgroup label="Road Infrastructure Defects (5)">
-                        <option value="Pothole">Potholes [Object Detection Supported]</option>
-                        <option value="Longitudinal Crack">Longitudinal Cracks [Object Detection Supported]</option>
-                        <option value="Transverse Crack">Transverse Cracks [Object Detection Supported (9 test samples)]</option>
-                        <option value="Alligator Crack">Alligator Cracks [Object Detection Supported]</option>
-                        <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Intended — Model Unavailable]</option>
-                      </optgroup>
-                      <optgroup label="Sanitation & Waste Defects (3)">
-                        <option value="Garbage Accumulation">Garbage Accumulation [Manual Reporting Only — Pending Training]</option>
-                        <option value="Illegal Dumping">Illegal Dumping [Manual Reporting Only — Pending Training]</option>
-                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Manual Reporting Only — Pending Training]</option>
-                      </optgroup>
-                      <optgroup label="Drainage & Flood Defects (4)">
-                        <option value="Blocked Drains">Blocked Drains [Manual Reporting Only — Insufficient Field Data]</option>
-                        <option value="Overflowing Drains">Overflowing Drains [Manual Reporting Only — Insufficient Field Data]</option>
-                        <option value="Waterlogging">Waterlogging [Classification Intended — Model Unavailable]</option>
-                        <option value="Damaged Drainage Covers">Damaged Drainage Covers [Manual Reporting Only — Insufficient Field Data]</option>
-                      </optgroup>
-                    </select>
-
-                    {/* Dynamic Capability Notice */}
-                    {(() => {
-                      const meta = ACTIVE_12_CATEGORIES.find(c => c.name === manualCategory);
-                      if (!meta) return null;
-                      const cap = meta.capabilityCategory;
-                      
-                      return (
-                        <div className="mt-2 p-2.5 rounded-lg bg-slate-900/80 border border-civic-border text-[11px] space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-mono uppercase text-slate-400">Model Capability:</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
-                              cap === 'object_detection_supported' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                              cap === 'classification_available' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
-                              cap === 'classification_unavailable' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                              'bg-slate-700/50 text-slate-300 border border-slate-600/50'
-                            }`}>
-                              {meta.capabilityLabel}
-                            </span>
-                          </div>
-                          <p className="text-slate-400 text-[10px] leading-relaxed">
-                            {meta.description}
-                          </p>
-                          <p className="text-[9px] text-slate-500 italic">
-                            * Category availability in selector does not imply automated model detection capability.
-                          </p>
+                    {aiResult.annotated_image_url && (
+                      <div className="relative rounded-lg overflow-hidden border border-civic-border">
+                        <img src={aiResult.annotated_image_url} alt="AI Annotated Overlay" className="w-full h-40 object-cover" />
+                        <div className="absolute bottom-2 left-2 bg-civic-bg/90 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] font-mono text-emerald-400 border border-emerald-500/20">
+                          {aiResult.bounding_boxes && aiResult.bounding_boxes.length > 0
+                            ? `YOLO BBox Overlay (${aiResult.bounding_boxes.length} detected)`
+                            : 'Scene Classification'}
                         </div>
-                      );
-                    })()}
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono text-slate-400 uppercase mb-1 block">Observed Severity</label>
-                    <select
-                      value={manualSeverity}
-                      onChange={(e) => setManualSeverity(e.target.value)}
-                      className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    >
-                      <option value="LOW">LOW</option>
-                      <option value="MEDIUM">MEDIUM</option>
-                      <option value="HIGH">HIGH</option>
-                      <option value="CRITICAL">CRITICAL</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Final Form */}
-                <div className="space-y-4 mt-auto">
-                  <div>
-                    <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Issue Title</label>
-                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="E.g. Deep pothole on main road"
-                      className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-colors" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Additional Context (Optional)</label>
-                    <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add any details helpful for repair crews..."
-                      className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-cyan-500/50 transition-colors" />
-                  </div>
-                  <button onClick={handleSubmitReport} disabled={submitting}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-600 to-cyan-600 hover:from-amber-500 hover:to-cyan-500 text-white shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4">
-                    {submitting ? (
-                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting Report...</>
-                    ) : (
-                      <>Submit Citizen Report <ArrowRight className="w-4 h-4" /></>
+                      </div>
                     )}
-                  </button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-5 flex-1 flex flex-col">
-                {/* AI Vision Payload Box */}
-                <div className="bg-civic-bg border border-civic-border rounded-xl p-4">
-                  <div className="text-[10px] font-mono text-slate-500 mb-3 flex items-center justify-between">
-                    <span>AI_VISION_PAYLOAD</span>
-                    <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> VERIFIED</span>
-                  </div>
-                  
-                  {aiResult.annotated_image_url && (
-                    <div className="mb-4 relative rounded-lg overflow-hidden border border-civic-border">
-                      <img src={aiResult.annotated_image_url} alt="AI Annotated" className="w-full h-40 object-cover" />
-                      <div className="absolute bottom-2 left-2 bg-civic-bg/90 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] font-mono text-emerald-400 border border-emerald-500/20">
-                        {aiResult.bounding_boxes && aiResult.bounding_boxes.length > 0
-                          ? 'BBox Detection Overlay'
-                          : 'Whole-Image Scene Classification (No Bounding Box)'}
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2 rounded-lg bg-slate-900/60 border border-civic-border">
+                        <div className="text-[9px] font-mono text-slate-500 uppercase">Model Prediction</div>
+                        <div className="font-bold text-cyan-300 mt-0.5">{aiResult.issue_type}</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-slate-900/60 border border-civic-border">
+                        <div className="text-[9px] font-mono text-slate-500 uppercase">Detection Confidence</div>
+                        <div className="font-bold text-emerald-400 font-mono mt-0.5">
+                          {((aiResult.confidence || 0) * 100).toFixed(1)}%
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div>
-                      <div className="text-[10px] font-mono text-slate-500 uppercase">Primary Defect</div>
-                      <div className="text-sm font-bold text-cyan-400 mt-0.5">{aiResult.issue_type}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-mono text-slate-500 uppercase">AI Confidence</div>
-                      <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{(aiResult.confidence! * 100).toFixed(1)}%</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-mono text-slate-500 uppercase">Severity Level</div>
-                      <div className="text-sm font-bold text-rose-400 mt-0.5">{aiResult.severity}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-mono text-slate-500 uppercase">Priority Score</div>
-                      <div className="text-sm font-bold text-amber-400 font-mono mt-0.5">{aiResult.priority_score}/100</div>
-                    </div>
-                  </div>
-
-                  {/* Multi-defect list if multiple defects found */}
-                  {aiResult.detected_defects && aiResult.detected_defects.length > 1 && (
-                    <div className="mb-4 pt-3 border-t border-civic-border">
-                      <div className="text-[10px] font-mono text-slate-500 uppercase mb-2">
-                        All Identified Defects ({aiResult.detected_defects.length})
+                    {/* Category Disagreement Notice */}
+                    {isCategoryMismatch && (
+                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                        <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                          <ShieldAlert className="w-4 h-4 shrink-0" />
+                          <span>Category Disagreement Detected</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300">
+                          You selected <strong className="text-white">"{selectedCategory}"</strong>, but YOLOv8 detected <strong className="text-cyan-300">"{aiResult.issue_type}"</strong>.
+                        </p>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setAiAccepted(false)}
+                            className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                              !aiAccepted
+                                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                                : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" /> Keep "{selectedCategory}"
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAiAccepted(true)}
+                            className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                              aiAccepted
+                                ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
+                                : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" /> Accept AI: "{aiResult.issue_type}"
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {aiResult.detected_defects.map((d, idx) => (
-                          <span key={idx} className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                            {d.category} ({(d.confidence * 100).toFixed(0)}%)
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pt-3 border-t border-civic-border">
-                    <div className="text-[10px] font-mono text-slate-500 uppercase">Auto-Routing Destination</div>
-                    <div className="text-xs font-semibold text-purple-400 mt-1 flex items-center gap-1.5">
-                      <ArrowRight className="w-3 h-3" /> {aiResult.recommended_department}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Final Form */}
-                <div className="space-y-4 mt-auto">
-                  <div>
-                    <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Issue Title</label>
-                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="E.g. Deep pothole on main road"
-                      className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-colors" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Additional Context (Optional)</label>
-                    <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add any details helpful for repair crews..."
-                      className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-cyan-500/50 transition-colors" />
-                  </div>
-                  <button onClick={handleSubmitReport} disabled={submitting}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4">
-                    {submitting ? (
-                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting Report...</>
-                    ) : (
-                      <>Commit to Database <ArrowRight className="w-4 h-4" /></>
                     )}
-                  </button>
-                </div>
-              </motion.div>
+                  </div>
+                ) : aiResult.status === 'no_detection' ? (
+                  <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 space-y-1.5">
+                    <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
+                      <Info className="w-4 h-4 shrink-0" />
+                      <span>No Road Defect Detected by Computer Vision</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      YOLOv8 evaluated this image and found no standard road cracks or potholes exceeding the confidence threshold. Your report will proceed with your selected category: <strong className="text-white">"{selectedCategory || 'Manual Report'}"</strong> for officer triage.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border border-slate-700 bg-slate-900/60 space-y-1">
+                    <div className="flex items-center gap-2 text-slate-300 text-xs font-semibold">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Computer Vision Offline</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Automated vision model is unavailable. Your report will be handled directly as a manual citizen dispatch.
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* Submission Summary Card */}
+            <div className="bg-civic-bg border border-civic-border rounded-xl p-4 space-y-3">
+              <div className="text-[10px] font-mono text-slate-500 uppercase">Dispatch Summary</div>
+              
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <div className="text-[9px] font-mono text-slate-500 uppercase">Effective Category</div>
+                  <div className="font-bold text-white mt-0.5 truncate">
+                    {effectiveCategory || <span className="text-amber-400 italic">Select in Step 1</span>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-mono text-slate-500 uppercase">Assigned Department</div>
+                  <div className="font-bold text-purple-400 mt-0.5 truncate">
+                    {DEPARTMENT_LOOKUP[effectiveCategory] || 'Municipal Dispatch'}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Observed Severity</label>
+                <select
+                  value={manualSeverity}
+                  onChange={(e) => setManualSeverity(e.target.value as SeverityLevel)}
+                  className="w-full bg-civic-card border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
+                >
+                  <option value={SeverityLevel.LOW}>LOW — Superficial defect</option>
+                  <option value={SeverityLevel.MEDIUM}>MEDIUM — Standard road hazard</option>
+                  <option value={SeverityLevel.HIGH}>HIGH — Substantial danger to traffic/pedestrians</option>
+                  <option value={SeverityLevel.CRITICAL}>CRITICAL — Immediate structural or safety hazard</option>
+                </select>
+              </div>
+
+              <div className="text-[10px] font-mono text-slate-500 flex items-center justify-between pt-1">
+                <span>VERIFICATION_STATUS:</span>
+                <span className="text-amber-400 font-bold">UNVERIFIED (Officer Review Required)</span>
+              </div>
+            </div>
+
+            {/* Final Form Inputs */}
+            <div className="space-y-4 mt-auto">
+              <div>
+                <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Issue Title (Optional)</label>
+                <input 
+                  type="text" 
+                  value={title} 
+                  onChange={(e) => setTitle(e.target.value)} 
+                  placeholder={effectiveCategory ? `E.g. ${effectiveCategory} near main junction` : 'E.g. Deep road hazard'}
+                  className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-colors" 
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-slate-500 uppercase mb-1 block">Additional Description / Context</label>
+                <textarea 
+                  rows={2} 
+                  value={description} 
+                  onChange={(e) => setDescription(e.target.value)} 
+                  placeholder="Provide landmarks, lane direction, or danger context for municipal crews..."
+                  className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-cyan-500/50 transition-colors" 
+                />
+              </div>
+
+              <button 
+                onClick={handleSubmitReport} 
+                disabled={submitting}
+                className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {submitting ? (
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting Report to Municipal Queue...</>
+                ) : (
+                  <>Submit Civic Defect Report <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
+            </div>
           </motion.div>
         </div>
       </div>

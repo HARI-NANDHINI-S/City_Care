@@ -778,23 +778,28 @@ export const IssueDetailsPage: React.FC = () => {
                       onChange={(e) => setVerifiedCategory(e.target.value)}
                       className="w-full bg-civic-bg border border-civic-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-all"
                     >
-                      <optgroup label="Road Infrastructure Defects (5)">
-                        <option value="Pothole">Potholes [Object Detection Supported]</option>
-                        <option value="Longitudinal Crack">Longitudinal Cracks [Object Detection Supported]</option>
-                        <option value="Transverse Crack">Transverse Cracks [Object Detection Supported]</option>
-                        <option value="Alligator Crack">Alligator Cracks [Object Detection Supported]</option>
-                        <option value="Damaged Road Surface">Damaged Road Surfaces [Classification Intended — Model Unavailable]</option>
+                      <optgroup label="Road Infrastructure Defects (6)">
+                        <option value="Pothole">Pothole [Object Detection Supported]</option>
+                        <option value="Longitudinal Crack">Longitudinal Crack [Object Detection Supported]</option>
+                        <option value="Transverse Crack">Transverse Crack [Object Detection Supported]</option>
+                        <option value="Alligator Crack">Alligator Crack [Object Detection Supported]</option>
+                        <option value="Damaged Road Surface">Damaged Road Surface [Manual Reporting]</option>
+                        <option value="Road Damage">Road Damage [Legacy Umbrella — Manual Reporting]</option>
                       </optgroup>
                       <optgroup label="Sanitation & Waste Defects (3)">
-                        <option value="Garbage Accumulation">Garbage Accumulation [Manual Reporting Only — Pending Training]</option>
-                        <option value="Illegal Dumping">Illegal Dumping [Manual Reporting Only — Pending Training]</option>
-                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Manual Reporting Only — Pending Training]</option>
+                        <option value="Garbage Accumulation">Garbage Accumulation [Manual Reporting]</option>
+                        <option value="Illegal Dumping">Illegal Dumping [Manual Reporting]</option>
+                        <option value="Overflowing Garbage Bins">Overflowing Garbage Bins [Manual Reporting]</option>
                       </optgroup>
                       <optgroup label="Drainage & Flood Defects (4)">
-                        <option value="Blocked Drains">Blocked Drains [Manual Reporting Only — Insufficient Field Data]</option>
-                        <option value="Overflowing Drains">Overflowing Drains [Manual Reporting Only — Insufficient Field Data]</option>
-                        <option value="Waterlogging">Waterlogging [Classification Intended — Model Unavailable]</option>
-                        <option value="Damaged Drainage Covers">Damaged Drainage Covers [Manual Reporting Only — Insufficient Field Data]</option>
+                        <option value="Blocked Drains">Blocked Drains [Manual Reporting]</option>
+                        <option value="Overflowing Drains">Overflowing Drains [Manual Reporting]</option>
+                        <option value="Waterlogging">Waterlogging [Manual Reporting]</option>
+                        <option value="Damaged Drainage Covers">Damaged Drainage Covers [Manual Reporting]</option>
+                      </optgroup>
+                      <optgroup label="Public Utilities & Safety (2)">
+                        <option value="Open Manhole">Open Manhole [Sewerage & Sanitation Board]</option>
+                        <option value="Broken Streetlight">Broken Streetlight [Electrical Infrastructure Dept]</option>
                       </optgroup>
                     </select>
                   </div>

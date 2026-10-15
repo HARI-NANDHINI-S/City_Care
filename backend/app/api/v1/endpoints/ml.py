@@ -202,7 +202,7 @@ def ml_clusters(db: Session = Depends(get_db)):
             'id': issue.id,
             'latitude': issue.latitude,
             'longitude': issue.longitude,
-            'issue_type': issue.issue_type.value if issue.issue_type else "Pothole",
+            'issue_type': issue.issue_type.value if issue.issue_type else "Uncategorized",
             'priority_score': issue.priority_score
         })
     c = get_clustering()
