@@ -50,6 +50,27 @@ class IssueStatusHistoryOut(BaseModel):
     class Config:
         from_attributes = True
 
+class IssueClarificationOut(BaseModel):
+    id: int
+    issue_id: int
+    request_text: str
+    requested_by_user_id: int
+    requested_by_name: Optional[str] = None
+    created_at: datetime
+    response_text: Optional[str] = None
+    response_image_path: Optional[str] = None
+    responded_at: Optional[datetime] = None
+    status: str
+    class Config:
+        from_attributes = True
+
+class CitizenClarificationResponseSchema(BaseModel):
+    response_text: str = Field(min_length=3, max_length=2000)
+    supplementary_image_url: Optional[str] = Field(default=None, max_length=500)
+
+class RequestClarificationSchema(BaseModel):
+    notes: str = Field(min_length=3, max_length=2000)
+
 class IssueDetailOut(BaseModel):
     id: int
     title: str
@@ -81,8 +102,15 @@ class IssueDetailOut(BaseModel):
     is_verified: bool = False
     verification_status: Optional[str] = "UNVERIFIED"
     ai_suggested_category: Optional[str] = None
+    last_reviewed_at: Optional[datetime] = None
+    last_reviewed_by_name: Optional[str] = None
+
+    # Phase 5 Citizen Clarification & Feedback fields
+    has_pending_clarification: bool = False
+    clarifications: List[IssueClarificationOut] = []
 
     reporter: Optional[UserSimple] = None
+
     department: Optional[DepartmentSimple] = None
     assigned_officer: Optional[UserSimple] = None
     images: List[IssueImageOut] = []
@@ -90,6 +118,7 @@ class IssueDetailOut(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 
 class DashboardStats(BaseModel):

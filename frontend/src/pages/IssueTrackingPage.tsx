@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { citizenService } from '../services/api';
 import { Issue, IssueStatus } from '../types';
-import { ArrowLeft, CheckCircle2, Circle, Clock, MapPin } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Clock, MapPin, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { StatusBadge } from '../components/common/StatusBadge';
 
@@ -73,8 +73,31 @@ export const IssueTrackingPage: React.FC = () => {
               </div>
             )}
           </div>
-          <StatusBadge status={issue.status} />
+          <StatusBadge status={issue.status} hasPendingClarification={issue.has_pending_clarification} />
         </div>
+
+        {/* Pending Clarification Action Banner */}
+        {issue.has_pending_clarification && (
+          <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-white">Additional Information Requested</div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Municipal reviewers have requested clarification on this report. Please review the inquiry and submit additional information.
+                </p>
+              </div>
+            </div>
+            <Link
+              to={`/issue/${issue.id}`}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-medium text-xs rounded-lg shrink-0 transition-colors"
+            >
+              Respond
+            </Link>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div className="mb-8">
@@ -150,6 +173,18 @@ export const IssueTrackingPage: React.FC = () => {
                     ) : isPending ? (
                       <div className="text-xs text-slate-600 mt-0.5">{stepDescriptions[step]}</div>
                     ) : null}
+
+                    {step === IssueStatus.UNDER_REVIEW && issue.has_pending_clarification && (
+                      <div className="text-xs text-amber-400 font-medium mt-2 flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Action Required: Municipal reviewer requested clarification</span>
+                      </div>
+                    )}
+                    {step === IssueStatus.UNDER_REVIEW && issue.is_verified && (
+                      <div className="text-xs text-emerald-400 font-mono mt-2 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                        ✓ Human Verified Category: {issue.verified_category}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               );

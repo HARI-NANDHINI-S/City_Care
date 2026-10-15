@@ -89,8 +89,14 @@ export const MyReportsPage: React.FC = () => {
 
               <div className="flex items-center gap-3 flex-wrap">
                 <PriorityBadge score={issue.priority_score} severity={issue.severity} showScore={false} />
-                <StatusBadge status={issue.status} />
+                <StatusBadge status={issue.status} hasPendingClarification={issue.has_pending_clarification} />
+                {issue.has_pending_clarification && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Action Required
+                  </span>
+                )}
               </div>
+
 
               <div className="w-full md:w-32">
                 <div className="flex justify-between text-[10px] text-slate-500 mb-1">

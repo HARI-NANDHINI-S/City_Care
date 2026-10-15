@@ -14,13 +14,19 @@ const fmt = (d?: string | null) => d ? new Date(d).toLocaleDateString() : '—';
 export const CitizenDashboardPage: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [reports, setReports] = useState<Issue[]>([]);
+  const [pendingClarifications, setPendingClarifications] = useState<Issue[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([citizenService.stats(), citizenService.reports({ limit: 6 })])
-      .then(([s, r]) => { setStats(s); setReports(r); })
+    Promise.all([
+      citizenService.stats(),
+      citizenService.reports({ limit: 6 }),
+      citizenService.getPendingClarifications().catch(() => [])
+    ])
+      .then(([s, r, pc]) => { setStats(s); setReports(r); setPendingClarifications(pc || []); })
       .catch(() => setError('Unable to load your dashboard. Please try again.'));
   }, []);
+
 
   if (error) return (
     <div className="p-8 flex items-center justify-center min-h-[40vh]">
@@ -68,6 +74,37 @@ export const CitizenDashboardPage: React.FC = () => {
           <PlusCircle className="w-4 h-4" /> Report New Issue
         </Link>
       </motion.div>
+
+      {/* Pending Clarifications Alert Banner */}
+      {pendingClarifications.length > 0 && (
+        <motion.div initial="hidden" animate="visible" variants={fadeUp}
+          className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-white flex items-center gap-2">
+                <span>Action Required: Clarification Requested</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-mono">
+                  {pendingClarifications.length} {pendingClarifications.length === 1 ? 'Report' : 'Reports'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Municipal reviewers require additional information or photos to proceed with review.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Link
+              to={`/issue/${pendingClarifications[0].id}`}
+              className="w-full sm:w-auto text-center px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs rounded-xl transition-colors"
+            >
+              Respond to Report #{pendingClarifications[0].id}
+            </Link>
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats */}
       <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
@@ -148,7 +185,7 @@ export const CitizenDashboardPage: React.FC = () => {
                       <span className="truncate">{issue.address || `${issue.latitude}, ${issue.longitude}`}</span>
                     </div>
                   </div>
-                  <StatusBadge status={issue.status} />
+                  <StatusBadge status={issue.status} hasPendingClarification={issue.has_pending_clarification} />
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">

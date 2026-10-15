@@ -84,11 +84,12 @@ class Settings(BaseSettings):
     # Database Configuration (Defaults to SQLite for seamless local dev; can set PostgreSQL DATABASE_URL in .env)
     DATABASE_URL: str = "sqlite:///./civicvision.db"
     
-    # Storage Paths
+    # Storage Paths & Upload Limits
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     UPLOAD_DIR: str = os.path.join(BASE_DIR, "uploads")
     ORIGINAL_IMG_DIR: str = os.path.join(UPLOAD_DIR, "original")
     ANNOTATED_IMG_DIR: str = os.path.join(UPLOAD_DIR, "annotated")
+    MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MiB limit (10,485,760 bytes)
     
     # CORS Origins
     CORS_ORIGINS: List[str] = [

@@ -4,6 +4,7 @@ from app.models.issue import Issue, IssueType, IssueStatus, SeverityLevel
 from app.models.image import IssueImage
 from app.models.history import IssueStatusHistory
 from app.models.duplicate import DuplicateIssueRelation
+from app.models.clarification import IssueClarification
 
 __all__ = [
     "Department",
@@ -16,4 +17,6 @@ __all__ = [
     "IssueImage",
     "IssueStatusHistory",
     "DuplicateIssueRelation",
+    "IssueClarification",
 ]
+

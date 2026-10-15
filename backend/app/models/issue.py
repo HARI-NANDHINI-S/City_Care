@@ -80,8 +80,16 @@ class Issue(Base):
     assigned_officer = relationship("User", foreign_keys=[assigned_officer_id])
     department = relationship("Department", back_populates="issues")
     images = relationship("IssueImage", back_populates="issue", cascade="all, delete-orphan")
-    status_history = relationship("IssueStatusHistory", back_populates="issue", cascade="all, delete-orphan")
+    status_history = relationship("IssueStatusHistory", back_populates="issue", cascade="all, delete-orphan", order_by="IssueStatusHistory.created_at.asc()")
     duplicate_relations = relationship("DuplicateIssueRelation", foreign_keys="[DuplicateIssueRelation.original_issue_id]", back_populates="original_issue", cascade="all, delete-orphan")
+    clarifications = relationship("IssueClarification", back_populates="issue", cascade="all, delete-orphan", order_by="IssueClarification.created_at.asc()")
+
+    @property
+    def has_pending_clarification(self) -> bool:
+        """True if there is an active clarification request awaiting citizen response."""
+        if hasattr(self, "clarifications") and self.clarifications:
+            return any(c.status == "PENDING" for c in self.clarifications)
+        return False
 
     @property
     def is_verified(self) -> bool:
@@ -109,7 +117,45 @@ class Issue(Base):
     @property
     def ai_suggested_category(self) -> str:
         """Original AI or reported category suggested prior to human verification."""
-        if (self.ai_confidence or 0) > 0 or self.ai_analysis_status == "SUCCESS":
+        if (self.ai_confidence or 0) > 0 or self.ai_analysis_status in ("SUCCESS", "AI_SUGGESTION_REJECTED") or self.detected_defects_json:
             return self.issue_type.value if hasattr(self.issue_type, 'value') else str(self.issue_type)
+        return None
+
+    @property
+    def last_reviewed_at(self) -> datetime:
+        """Timestamp of the most recent human triage or verification decision."""
+        if hasattr(self, "status_history") and self.status_history:
+            sorted_history = sorted(
+                self.status_history,
+                key=lambda h: (h.created_at or datetime.min, getattr(h, "id", 0) or 0),
+                reverse=True
+            )
+            for h in sorted_history:
+                if h.notes and any(k in h.notes for k in ("CONFIRMED", "CORRECTED", "REJECTED", "verified as", "reviewed and updated", "information requested")):
+                    return h.created_at
+        if self.verified_category:
+            return self.updated_at
+        return None
+
+    @property
+    def last_reviewed_by_name(self) -> str:
+        """Full name of the reviewer who recorded the most recent triage decision."""
+        if hasattr(self, "status_history") and self.status_history:
+            sorted_history = sorted(
+                self.status_history,
+                key=lambda h: (h.created_at or datetime.min, getattr(h, "id", 0) or 0),
+                reverse=True
+            )
+            for h in sorted_history:
+                if h.notes and any(k in h.notes for k in ("CONFIRMED", "CORRECTED", "REJECTED", "verified as", "reviewed and updated", "information requested")):
+                    if h.changed_by and getattr(h.changed_by, "full_name", None):
+                        return h.changed_by.full_name
+                    import re
+                    match = re.search(r"reviewer \(([^)]+)\)", h.notes)
+                    if match:
+                        return match.group(1)
+                    if getattr(h, "changed_by_user_id", None):
+                        return f"User #{h.changed_by_user_id}"
+                    return None
         return None
 

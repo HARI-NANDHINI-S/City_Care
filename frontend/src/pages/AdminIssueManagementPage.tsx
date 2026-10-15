@@ -145,7 +145,7 @@ export const AdminIssueManagementPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4"><PriorityBadge score={issue.priority_score} severity={issue.severity} /></td>
                     <td className="py-3 px-4 text-xs text-purple-300/80">{issue.department?.name || 'Unassigned'}</td>
-                    <td className="py-3 px-4"><StatusBadge status={issue.status} /></td>
+                    <td className="py-3 px-4"><StatusBadge status={issue.status} hasPendingClarification={issue.has_pending_clarification} /></td>
                     <td className="py-3 px-4 font-mono text-slate-500">{new Date(issue.created_at).toLocaleDateString()}</td>
                     <td className="py-3 px-4 text-right">
                       <Link to={`/issue/${issue.id}`}

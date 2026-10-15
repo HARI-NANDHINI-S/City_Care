@@ -7,8 +7,10 @@ import {
   MapPoint,
   AnalyticsDashboardData,
   IssueStatus,
-  IssueType
+  IssueType,
+  IssueClarification
 } from '../types';
+
 
 const API_BASE_URL = '/api/v1';
 
@@ -120,6 +122,14 @@ export const issueService = {
     const res = await api.post<Issue>(`/issues/${id}/triage`, { decision, verified_category, notes });
     return res.data;
   },
+  requestClarification: async (id: number, notes: string) => {
+    const res = await api.post<IssueClarification>(`/issues/${id}/clarifications`, { notes });
+    return res.data;
+  },
+  getClarifications: async (id: number) => {
+    const res = await api.get<IssueClarification[]>(`/issues/${id}/clarifications`);
+    return res.data;
+  },
 };
 
 
@@ -142,7 +152,16 @@ export const citizenService = {
   reports: async (params?: Record<string, string | number | undefined>) => (await api.get<Issue[]>('/issues/my-reports', { params })).data,
   details: async (id: number) => (await api.get<Issue>(`/issues/${id}`)).data,
   timeline: async (id: number) => (await api.get(`/issues/${id}/timeline`)).data,
+  respondToClarification: async (issueId: number, clarificationId: number, data: { response_text: string; supplementary_image_url?: string }) => {
+    const res = await api.post<Issue>(`/issues/${issueId}/clarifications/${clarificationId}/respond`, data);
+    return res.data;
+  },
+  getPendingClarifications: async () => {
+    const res = await api.get<Issue[]>('/issues/clarifications/pending');
+    return res.data;
+  },
 };
+
 
 export const officerService = {
   assigned: async () => (await api.get<Issue[]>('/issues/department/assigned')).data,

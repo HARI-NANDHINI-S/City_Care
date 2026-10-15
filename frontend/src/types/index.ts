@@ -313,8 +313,25 @@ export interface Issue {
   is_verified?: boolean;
   verification_status?: 'UNVERIFIED' | 'CONFIRMED' | 'CORRECTED' | 'REJECTED';
   ai_suggested_category?: string | null;
+  last_reviewed_at?: string | null;
+  last_reviewed_by_name?: string | null;
+  has_pending_clarification?: boolean;
+  clarifications?: IssueClarification[];
   created_at: string;
   updated_at: string;
+}
+
+export interface IssueClarification {
+  id: number;
+  issue_id: number;
+  request_text: string;
+  requested_by_user_id: number;
+  requested_by_name?: string | null;
+  created_at: string;
+  response_text?: string | null;
+  response_image_path?: string | null;
+  responded_at?: string | null;
+  status: 'PENDING' | 'RESPONDED';
 }
 
 export enum ReviewDecision {

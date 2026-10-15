@@ -105,13 +105,19 @@ export const OfficerDashboardPage: React.FC = () => {
                   <div className="h-40 bg-slate-900 relative overflow-hidden">
                     <img src={imgUrl} alt={issue.title} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-civic-card/80 to-transparent" />
-                    <div className="absolute top-2 right-2"><StatusBadge status={issue.status} /></div>
+                    <div className="absolute top-2 right-2"><StatusBadge status={issue.status} hasPendingClarification={issue.has_pending_clarification} /></div>
                     <div className="absolute bottom-2 left-2 text-[10px] font-mono text-cyan-300 bg-civic-bg/80 px-2 py-0.5 rounded border border-cyan-500/20">
                       #{issue.id}
                     </div>
                   </div>
                 )}
                 <div className="p-4 flex-1 flex flex-col gap-3">
+                  {!imgUrl && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-cyan-300">#{issue.id}</span>
+                      <StatusBadge status={issue.status} hasPendingClarification={issue.has_pending_clarification} />
+                    </div>
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="text-[10px] font-mono text-cyan-400/80 uppercase">{issue.issue_type}</div>

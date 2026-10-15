@@ -3,10 +3,14 @@ import { IssueStatus } from '../../types';
 
 interface StatusBadgeProps {
   status: IssueStatus | string;
+  hasPendingClarification?: boolean;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, hasPendingClarification }) => {
   const getStyle = () => {
+    if (hasPendingClarification) {
+      return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+    }
     switch (status) {
       case IssueStatus.RESOLVED:
       case 'RESOLVED':
@@ -30,9 +34,14 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     }
   };
 
+  const label = hasPendingClarification
+    ? 'Clarification Needed'
+    : status.replace(/_/g, ' ');
+
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-xs font-medium ${getStyle()}`}>
-      {status.replace('_', ' ')}
+      {label}
     </span>
   );
 };
+
